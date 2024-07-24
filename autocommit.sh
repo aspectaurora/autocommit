@@ -6,16 +6,18 @@
 # It automatically stages and commits the changes with the generated message.
 #
 # Usage:
-# autocommit [-c <context>] [-l <logfile>]
+# autocommit [-c <context>] [-l <logfile>] [-j]
 #
 # Options:
 # -c <context>  Add a context to the commit message (e.g., the issue number)
 # -l <logfile>  Log the commit messages to a file
+# -j            Generate a Jira ticket title and description instead of a commit message
 #
 # Examples:
 # autocommit
 # autocommit -c "Fixes issue #123"
 # autocommit -c "Fixes issue #123" -l ~/logs/autocommit.log
+# autocommit -j
 #
 # Dependencies:
 # - sgpt
@@ -47,12 +49,14 @@ get_branch_name() {
 autocommit() {
     local context=""
     local logfile=""
+    local generate_jira=false
     local OPTIND opt
 
-    while getopts "c:l:" opt; do
+    while getopts "c:l:j" opt; do
         case $opt in
             c) context="$OPTARG";;
             l) logfile="$OPTARG";;
+            j) generate_jira=true;;
             \?) echo "Invalid option -$OPTARG" >&2; return 1;;
         esac
     done
@@ -62,40 +66,57 @@ autocommit() {
     local branch_name=$(get_branch_name)
     echo "Branch: $branch_name"
 
-    local commitMessage
-    local instructions="Generate a concise git commit message that summarizes the key changes. \
-        Ignore the boring reformatting stuff. Use the format 'REFACTOR|FEAT|CHORES|BUGFIX|ETC:[ABD-123] A commit message' \
-        at the start of the message, choosing the most appropriate category. \
-        Current branch: $branch_name"
+    local message
+    local instructions
+
+    if $generate_jira; then
+        instructions="Based on the following git diff, generate a Jira ticket title and description. \
+            Think retropectively as this ticket would be created way before the changes done. \
+            DoD section is welcomed but not required. \
+            Format the output as follows: \
+            Title: [A concise title for the Jira ticket] \
+            Desciption: [A detailed description of the changes to be done and their impact]"
+    else
+        instructions="Generate a concise git commit message that summarizes the key changes. \
+            Ignore the boring reformatting stuff. Use the format 'REFACTOR|FEAT|CHORES|BUGFIX|ETC:[ABD-123] A commit message' \
+            at the start of the message, choosing the most appropriate category. \
+            Current branch: $branch_name"
+    fi
 
     if [[ -z "$context" ]]; then
-        commitMessage=$(git diff --staged | sgpt --model gpt-4o-mini "$instructions")
+        message=$(git diff --staged | sgpt --model gpt-4o-mini "$instructions")
     else
-        commitMessage=$(git diff --staged | sgpt --model gpt-4o-mini "$instructions Context: $context")
+        message=$(git diff --staged | sgpt --model gpt-4o-mini "$instructions Context: $context")
     fi
 
     local datetime=$(date +"%Y-%m-%d %H:%M:%S")
-    local successMessage="$datetime - Commit successful: $commitMessage"
-    local failMessage="$datetime - Commit failed"
 
-    if git commit -m"$commitMessage"; then
+    if $generate_jira; then
+        echo "Generated Jira ticket:"
+        echo "$message"
         if [[ -n "$logfile" ]]; then
             mkdir -p "$(dirname "$logfile")"
-            echo "$successMessage" >> "$logfile"
-        else
-            echo "$successMessage"
+            echo "$datetime - Generated Jira ticket:" >> "$logfile"
+            echo "$message" >> "$logfile"
         fi
     else
-        if [[ -n "$logfile" ]]; then
-            mkdir -p "$(dirname "$logfile")"
-            echo "$failMessage" >> "$logfile"
+        local successMessage="$datetime - Commit successful: $message"
+        local failMessage="$datetime - Commit failed"
+
+        if git commit -m"$message"; then
+            if [[ -n "$logfile" ]]; then
+                mkdir -p "$(dirname "$logfile")"
+                echo "$successMessage" >> "$logfile"
+            else
+                echo "$successMessage"
+            fi
         else
-            echo "$failMessage"
+            if [[ -n "$logfile" ]]; then
+                mkdir -p "$(dirname "$logfile")"
+                echo "$failMessage" >> "$logfile"
+            else
+                echo "$failMessage"
+            fi
         fi
     fi
 }
-
-# If the script is called directly, execute the function
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    autocommit "$@"
-fi
