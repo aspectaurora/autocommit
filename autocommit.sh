@@ -27,8 +27,10 @@
 # 1. Install sgpt:
 #    $ pip install shell-gpt
 # 2. Add this script to your shell profile (e.g. .bashrc, .zshrc):
-#    source /path/to/autocommit.sh
+#    echo "source /path/to/autocommit.sh" >> ~/.bashrc
+#    echo "source /path/to/autocommit.sh" >> ~/.zshrc
 # 3. Reload your shell profile:
+#    $ source ~/.bashrc
 #    $ source ~/.zshrc
 # 4. Use the autocommit command in your git repositories:
 #    $ autocommit
@@ -41,6 +43,17 @@
 # 
 # Inspired by:
 # https://medium.com/@marc_fasel/smash-your-git-commit-messages-like-a-champ-using-chatgpt-0cbe8ea7b3df
+
+# Check if dependencies are installed
+if ! command -v sgpt &> /dev/null; then
+    echo "Error: sgpt is not installed. Please install it using 'pip install shell-gpt'."
+    exit 1
+fi
+
+if ! command -v git &> /dev/null; then
+    echo "Error: git is not installed. Please install it and try again."
+    exit 1
+fi
 
 get_branch_name() {
     git rev-parse --abbrev-ref HEAD
@@ -75,7 +88,7 @@ autocommit() {
             DoD section is welcomed but not required. \
             Format the output as follows: \
             Title: [A concise title for the Jira ticket] \
-            Desciption: [A detailed description of the changes to be done and their impact]"
+            Description: [A detailed description of the changes to be done and their impact]"
     else
         instructions="Generate a concise git commit message that summarizes the key changes. \
             Ignore the boring reformatting stuff. Use the format 'REFACTOR|FEAT|CHORES|BUGFIX|ETC:[ABD-123] A commit message' \
