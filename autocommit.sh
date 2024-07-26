@@ -133,3 +133,8 @@ autocommit() {
         fi
     fi
 }
+
+# If the script is called directly, execute the function
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    autocommit "$@"
+fi
