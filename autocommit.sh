@@ -6,13 +6,14 @@
 # It automatically stages and commits the changes with the generated message.
 #
 # Usage:
-# autocommit [-c <context>] [-l <logfile>] [-j] [-n <number_of_commits>]
+# autocommit [-c <context>] [-l <logfile>] [-j] [-n <number_of_commits>] [-mo]
 #
 # Options:
 # -c <context>  Add a context to the commit message (e.g., the issue number)
 # -l <logfile>  Log the commit messages to a file
 # -j            Generate a Jira ticket title and description instead of a commit message
 # -n <number>   Number of recent commits to consider (if not provided, uses staged changes)
+# -mo           Message only, do not commit
 #
 # Examples:
 # autocommit
@@ -20,6 +21,7 @@
 # autocommit -c "Fixes issue #123" -l ~/logs/autocommit.log
 # autocommit -j
 # autocommit -n 10
+# autocommit -mo
 #
 # Dependencies:
 # - sgpt
@@ -63,15 +65,18 @@ autocommit() {
     local context=""
     local logfile=""
     local generate_jira=false
+    local message_only=false
     local num_commits=""
     local OPTIND opt
 
-    while getopts "c:l:jn:" opt; do
+    while getopts "c:l:jn:mo" opt; do
         case $opt in
             c) context="$OPTARG";;
             l) logfile="$OPTARG";;
             j) generate_jira=true;;
-            n) num_commits="$OPTARG";;
+            n) num_commits="$OPTARG";;            
+            m) message_only=true;;  # Set the flag when -mo is used
+            o) ;;  # This is needed to properly handle the 'o' in 'mo'            
             \?) echo "Invalid option -$OPTARG" >&2; return 1;;
         esac
     done
@@ -80,6 +85,7 @@ autocommit() {
 
     local branch_name=$(get_branch_name)
     echo "Branch: $branch_name"
+    echo "Options: context=$context, logfile=$logfile, generate_jira=$generate_jira, num_commits=$num_commits, message_only=$message_only"
 
     local message
     local instructions
@@ -92,40 +98,87 @@ autocommit() {
         changes=$(git diff --staged)
         echo "Analyzing staged changes"
     fi
-    local generate_jira_instructions="generate a Jira ticket title and description. \
-                Think retropectively as this ticket would be created way before the changes done. \
-                Stay high-level and combine smaller changes to overarching topics. Skip describing any reformatting changes. \
-                Format the output as follows: \
-                Title: [A concise title for the Jira ticket] \
-                Description: [A detailed description of the changes and their impact]" 
+    local generate_jira_instructions="generate a Jira ticket title and description as if it were being created before the work was done. \
+        Describe what needs to be implemented, even though these changes have already been made. \
+        Focus on high-level objectives and overarching goals rather than specific code changes. \
+        Combine smaller changes into broader, more strategic tasks. \
+        Ignore any reformatting or minor code cleanup. \
+        It is crucial to strictly adhere to the following output format: \
+        Title: [A concise, goal-oriented title for the Jira ticket] \
+        Description: [A detailed description of what needs to be done, expected outcomes, and potential impacts]"
 
     if $generate_jira; then
-        if [[ -n "$num_commits" ]]; then            
+        if [[ -n "$num_commits" ]]; then
             instructions="Based on the following recent git commits, $generate_jira_instructions \
-                Recent commits: $changes"            
-        else            
-            instructions="Based on the following git diff, $generate_jira_instructions"
+                Use these commits to infer what the original task or feature request might have been. \
+                Remember to strictly follow the specified output format. \
+                Recent commits: $changes"
+        else
+            instructions="Based on the following git diff, $generate_jira_instructions \
+                Use this diff to infer what the original task or feature request might have been. \
+                Remember to strictly follow the specified output format."
         fi
     else
-        if [[ -n "$num_commits" ]]; then            
+        if [[ -n "$num_commits" ]]; then
             instructions="Generate a concise git commit message that summarizes the key changes from these recent commits. \
-                Use the format 'REFACTOR|FEAT|CHORES|BUGFIX|ETC:[ABD-123] A commit message' \
-                at the start of the message, choosing the most appropriate category. \
+                The message must strictly follow this format: \
+                REFACTOR|FEAT|CHORES|BUGFIX|CICD|ETC:[ABD-123] A concise summary of changes \
+                \
+                - Key change or impact \
+                - Another key change or impact \
+                - A third key change or impact if necessary \
+                \
+                Choose the most appropriate category (REFACTOR|FEAT|CHORES|BUGFIX|CICD|ETC). \
+                Replace [ABD-123] with an appropriate ticket number if known, or remove it if not applicable. \
+                Focus on the overall purpose and impact of the changes, not just technical details. \
+                Combine smaller changes into broader, more meaningful descriptions. \
+                Ignore any reformatting or minor code cleanup. \
+                Ignore the boring reformatting stuff. \
                 Current branch: $branch_name \
                 Recent commits: $changes"
         else
             instructions="Generate a concise git commit message that summarizes the key changes. \
-                Stay high-level and combine smaller changes to overarching topics. Skip describing any reformatting changes. \
-                Ignore the boring reformatting stuff. Use the format 'REFACTOR|FEAT|CHORES|BUGFIX|ETC:[ABD-123] A commit message' \
+                Ignore the boring reformatting stuff. 
+                If brach name starts as 'abd-123-*' use the format 'REFACTOR|FEAT|CHORES|BUGFIX|ETC:[ABD-123] A commit message' \
+                If not, use the format 'REFACTOR|FEAT|CHORES|BUGFIX|ETC: A commit message' \
                 at the start of the message, choosing the most appropriate category. \
                 Current branch: $branch_name"
+
+            # instructions="Generate a concise git commit message that summarizes the key changes. \
+            #     The message must strictly follow this format: \
+            #     REFACTOR|FEAT|CHORES|BUGFIX|CICD|ETC:[ABD-123] A concise summary of changes \
+            #     \
+            #     - Key change or impact \
+            #     - Another key change or impact \
+            #     - A third key change or impact if necessary \
+            #     \
+            #     Choose the most appropriate category (REFACTOR|FEAT|CHORES|BUGFIX|CICD|ETC). \
+            #     Focus on the overall purpose and impact of the changes, not just technical details. \
+            #     Combine smaller changes into broader, more meaningful descriptions. \
+            #     Ignore any reformatting or minor code cleanup. \
+            #     Ignore the boring reformatting stuff. \
+            #     Current branch: $branch_name"
         fi
     fi
 
+    # Handle no changes
+    if [[ -z "$changes" ]]; then
+        echo "No changes to commit"
+        return
+    fi
+    
     if [[ -z "$context" ]]; then
-        message=$(echo "$changes" | sgpt --model gpt-4o-mini "$instructions")
+        if $message_only; then
+            message=$(echo "$changes" | sgpt --model gpt-4o-mini "$instructions" --no-cache)
+        else
+            message=$(echo "$changes" | sgpt --model gpt-4o-mini "$instructions")
+        fi        
     else
-        message=$(echo "$changes" | sgpt --model gpt-4o-mini "$instructions Context: $context")
+        if $message_only; then
+            message=$(echo "$changes" | sgpt --model gpt-4o-mini "$instructions Context: $context" --no-cache)
+        else
+            message=$(echo "$changes" | sgpt --model gpt-4o-mini "$instructions Context: $context")
+        fi
     fi
 
     local datetime=$(date +"%Y-%m-%d %H:%M:%S")
@@ -146,7 +199,11 @@ autocommit() {
                 mkdir -p "$(dirname "$logfile")"
                 echo "$successMessage" >> "$logfile"
             fi
-        else
+        else            
+            if $message_only; then
+                echo "$message"
+                return
+            fi
             local successMessage="$datetime - Commit successful: $message"
             local failMessage="$datetime - Commit failed"
 
