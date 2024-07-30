@@ -12,6 +12,7 @@
 # -c <context>  Add a context to the commit message (e.g., the issue number)
 # -l <logfile>  Log the commit messages to a file
 # -j            Generate a Jira ticket title and description instead of a commit message
+# -pr           Generate a Pull Request title and description instead of a commit message
 # -n <number>   Number of recent commits to consider (if not provided, uses staged changes)
 # -mo           Message only, do not commit
 #
@@ -20,6 +21,7 @@
 # autocommit -c "Fixes issue #123"
 # autocommit -c "Fixes issue #123" -l ~/logs/autocommit.log
 # autocommit -j
+# autocommit -pr
 # autocommit -n 10
 # autocommit -mo
 #
@@ -65,11 +67,12 @@ autocommit() {
     local context=""
     local logfile=""
     local generate_jira=false
+    local generate_pr=false
     local message_only=false
     local num_commits=""
     local OPTIND opt
 
-    while getopts "c:l:jn:mo" opt; do
+    while getopts "c:l:jn:mopr" opt; do
         case $opt in
             c) context="$OPTARG";;
             l) logfile="$OPTARG";;
@@ -77,6 +80,8 @@ autocommit() {
             n) num_commits="$OPTARG";;            
             m) message_only=true;;  # Set the flag when -mo is used
             o) ;;  # This is needed to properly handle the 'o' in 'mo'            
+            p) generate_pr=true;;
+            r) ;;            
             \?) echo "Invalid option -$OPTARG" >&2; return 1;;
         esac
     done
@@ -106,21 +111,41 @@ autocommit() {
         It is crucial to strictly adhere to the following output format: \
         Title: [A concise, goal-oriented title for the Jira ticket] \
         Description: [A detailed description of what needs to be done, expected outcomes, and potential impacts]"
-
+    local generate_pr_instructions="generate a Pull Request title and description. \                        
+        Ignore any reformatting or minor code cleanup. \
+        The title must strictly follow this format: \
+        REFACTOR|FEAT|CHORES|BUGFIX|CICD|ETC:[ABD-123] A concise summary of changes \
+        Replace [ABD-123] with an appropriate ticket number if known, or remove it if not applicable. \
+        Jira ticket number is optional and could be found in the branch name."
+    local role="You are Autocommit - like having a butler for your git commits, only less British (c) Marc Fasel"
     if $generate_jira; then
         if [[ -n "$num_commits" ]]; then
-            instructions="Based on the following recent git commits, $generate_jira_instructions \
+            instructions="$role \
+                Based on the following recent git commits, $generate_jira_instructions \
                 Use these commits to infer what the original task or feature request might have been. \
                 Remember to strictly follow the specified output format. \
                 Recent commits: $changes"
         else
-            instructions="Based on the following git diff, $generate_jira_instructions \
+            instructions="$role \
+                Based on the following git diff, $generate_jira_instructions \
                 Use this diff to infer what the original task or feature request might have been. \
                 Remember to strictly follow the specified output format."
         fi
+    elif $generate_pr; then
+        if [[ -n "$num_commits" ]]; then
+            instructions="$role \
+                Based on the following recent git commits, $generate_pr_instructions \
+                Recent commits: $changes \
+                Current branch: $branch_name"                
+        else
+            instructions="$role \
+                Based on the following git diff, $generate_pr_instructions \
+                Current branch: $branch_name"
+        fi
     else
         if [[ -n "$num_commits" ]]; then
-            instructions="Generate a concise git commit message that summarizes the key changes from these recent commits. \
+            instructions="$role \
+                Generate a concise git commit message that summarizes the key changes from these recent commits. \
                 The message must strictly follow this format: \
                 REFACTOR|FEAT|CHORES|BUGFIX|CICD|ETC:[ABD-123] A concise summary of changes \
                 \
@@ -130,20 +155,22 @@ autocommit() {
                 \
                 Choose the most appropriate category (REFACTOR|FEAT|CHORES|BUGFIX|CICD|ETC). \
                 Replace [ABD-123] with an appropriate ticket number if known, or remove it if not applicable. \
+                Jira ticket number is optional and could be found in the branch name. \
                 Focus on the overall purpose and impact of the changes, not just technical details. \
                 Combine smaller changes into broader, more meaningful descriptions. \
                 Ignore any reformatting or minor code cleanup. \
-                Ignore the boring reformatting stuff. \
-                Current branch: $branch_name \
-                Recent commits: $changes"
+                Ignore the boring reformatting stuff. \                
+                Recent commits: $changes \
+                Current branch: $branch_name"
         else
-            instructions="Generate a concise git commit message that summarizes the key changes. \
+            instructions="You are Autocommit - like having a butler for your git commits, only less British (c) Marc Fasel \
+                Generate a concise git commit message that summarizes the key changes. \
                 Ignore the boring reformatting stuff. 
                 If brach name starts as 'abd-123-*' use the format 'REFACTOR|FEAT|CHORES|BUGFIX|ETC:[ABD-123] A commit message' \
                 If not, use the format 'REFACTOR|FEAT|CHORES|BUGFIX|ETC: A commit message' \
                 at the start of the message, choosing the most appropriate category. \
                 Current branch: $branch_name"
-
+                
             # instructions="Generate a concise git commit message that summarizes the key changes. \
             #     The message must strictly follow this format: \
             #     REFACTOR|FEAT|CHORES|BUGFIX|CICD|ETC:[ABD-123] A concise summary of changes \
@@ -168,17 +195,9 @@ autocommit() {
     fi
     
     if [[ -z "$context" ]]; then
-        if $message_only; then
-            message=$(echo "$changes" | sgpt --model gpt-4o-mini "$instructions" --no-cache)
-        else
-            message=$(echo "$changes" | sgpt --model gpt-4o-mini "$instructions")
-        fi        
+        message=$(echo "$changes" | sgpt --model gpt-4o-mini "$instructions" --no-cache)
     else
-        if $message_only; then
-            message=$(echo "$changes" | sgpt --model gpt-4o-mini "$instructions Context: $context" --no-cache)
-        else
-            message=$(echo "$changes" | sgpt --model gpt-4o-mini "$instructions Context: $context")
-        fi
+        message=$(echo "$changes" | sgpt --model gpt-4o-mini "$instructions \n\n Important Context: $context" --no-cache)
     fi
 
     local datetime=$(date +"%Y-%m-%d %H:%M:%S")
@@ -192,6 +211,16 @@ autocommit() {
             echo "$message" >> "$logfile"
         fi
     else
+        if $generate_pr; then
+            echo "Generated Pull Request:"
+            echo "$message"
+            if [[ -n "$logfile" ]]; then
+                mkdir -p "$(dirname "$logfile")"
+                echo "$datetime - Generated Pull Request:" >> "$logfile"
+                echo "$message" >> "$logfile"
+            fi
+            return
+        fi
         if [[ -n "$num_commits" ]]; then
             local successMessage="$datetime - Generated commit message based on recent commits: $message"
             echo "$successMessage"
