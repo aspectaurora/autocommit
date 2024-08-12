@@ -103,6 +103,13 @@ autocommit() {
         changes=$(git diff --staged)
         echo "Analyzing staged changes"
     fi
+
+    # Handle no changes
+    if [[ -z "$changes" ]]; then
+        echo "No changes to commit"
+        return
+    fi
+
     local generate_jira_instructions="generate a Jira ticket title and description as if it were being created before the work was done. \
         Describe what needs to be implemented, even though these changes have already been made. \
         Focus on high-level objectives and overarching goals rather than specific code changes. \
@@ -117,7 +124,7 @@ autocommit() {
         REFACTOR|FEAT|CHORES|BUGFIX|CICD|ETC:[ABD-123] A concise summary of changes \
         Replace [ABD-123] with an appropriate ticket number if known, or remove it if not applicable. \
         Jira ticket number is optional and could be found in the branch name."
-    local role="You are Autocommit - like having a butler for your git commits, only less British (c) Marc Fasel"
+    local role="You are Autocommit Assistant - like having a butler for your git commits, only less British (c) Marc Fasel"
     if $generate_jira; then
         if [[ -n "$num_commits" ]]; then
             instructions="$role \
@@ -187,17 +194,11 @@ autocommit() {
             #     Current branch: $branch_name"
         fi
     fi
-
-    # Handle no changes
-    if [[ -z "$changes" ]]; then
-        echo "No changes to commit"
-        return
-    fi
     
     if [[ -z "$context" ]]; then
-        message=$(echo "$changes" | sgpt --model gpt-4o-mini "$instructions" --no-cache)
+        message=$(echo "$changes" | sgpt --model gpt-4o-mini --no-cache "$instructions")
     else
-        message=$(echo "$changes" | sgpt --model gpt-4o-mini "$instructions \n\n Important Context: $context" --no-cache)
+        message=$(echo "$changes" | sgpt --model gpt-4o-mini --no-cache "$instructions \n\n Important Context: $context")
     fi
 
     local datetime=$(date +"%Y-%m-%d %H:%M:%S")
