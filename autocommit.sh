@@ -63,6 +63,62 @@ get_branch_name() {
     git rev-parse --abbrev-ref HEAD
 }
 
+enforce_consistency() {
+    local raw_message="$1"
+    local branch_name="$2"
+    local ticket_number=""
+
+    local consistency_instructions="Format the following commit message according to these specifications:
+    
+    - Begin with the appropriate category (e.g., FEAT, BUGFIX, REFACTOR).
+    - Include the Jira ticket number if present.
+    - The final format should be: CATEGORY:[JIRA_TICKET_NUMBER] A concise summary of changes.
+    - Provide only the final commit message without any additional comments or instructions.
+    - If ticket number is not present, try to infer it from the branch name: $branch_name
+
+    Raw commit message: \"$raw_message\""
+
+    # Generate the refined commit message
+    local refined_message=$(echo "$consistency_instructions" | sgpt --model gpt-4o-mini --no-cache)
+
+    # If there was no ticket number, remove the empty brackets
+    if [[ -z "$ticket_number" ]]; then
+        refined_message=$(echo "$refined_message" | sed 's/\[\] //')
+    fi
+        
+    echo "$refined_message"
+}
+
+validate_message() {
+    local message="$1"
+    local branch_name="$2"
+    local ticket_number=""
+
+    # Extract the ticket number from the branch name (assuming it follows the pattern [ABC-123])
+    if [[ $branch_name =~ ([A-Z]+-[0-9]+) ]]; then
+        ticket_number="${BASH_REMATCH[1]}"
+    fi
+
+    # Basic validation rules
+    if [[ ! $message =~ ^[A-Z] ]]; then
+        echo "Validation failed: Commit message must start with a capitalized word."
+        return 1
+    fi
+
+    # if [[ -z "$ticket_number" && $message =~ \[.*\] ]]; then
+    #     echo "Validation failed: Commit message contains an empty or invalid ticket number."
+    #     return 1
+    # fi
+
+    if [[ $message =~ Based\ on\ the\ changes ]]; then
+        echo "Validation failed: Commit message contains unnecessary phrases."
+        return 1
+    fi
+
+    # If all validations pass
+    return 0
+}
+
 autocommit() {
     local context=""
     local logfile=""
@@ -91,8 +147,7 @@ autocommit() {
     local branch_name=$(get_branch_name)
     echo "Branch: $branch_name"
     echo "Options: context=$context, logfile=$logfile, generate_jira=$generate_jira, num_commits=$num_commits, message_only=$message_only"
-
-    local message
+    
     local instructions
     local changes
 
@@ -195,11 +250,36 @@ autocommit() {
         fi
     fi
     
+    local raw_message
     if [[ -z "$context" ]]; then
-        message=$(echo "$changes" | sgpt --model gpt-4o-mini --no-cache "$instructions")
+        raw_message=$(echo "$changes" | sgpt --model gpt-4o-mini --no-cache "$instructions")
     else
-        message=$(echo "$changes" | sgpt --model gpt-4o-mini --no-cache "$instructions \n\n Important Context: $context")
+        raw_message=$(echo "$changes" | sgpt --model gpt-4o-mini --no-cache "$instructions \n\n Important Context: $context")
     fi
+    echo "Raw message:"
+    echo "$raw_message"
+    # echo "Enforcing consistency..."
+    local message
+    # Validate the raw commit message
+    if ! validate_message "$raw_message" "$branch_name"; then
+        echo "Raw message validation failed."
+        
+        # Optionally enforce consistency if validation fails
+        message=$(enforce_consistency "$raw_message" "$branch_name")
+    else
+        message="$raw_message"
+    fi
+
+    # Handle empty commit messages
+    if [[ -z "$message" ]]; then
+        echo "Error: No commit message generated."
+        return 1
+    fi
+
+    # local message=$(enforce_consistency "$raw_message" "$branch_name")
+    echo "Final message:"
+    echo "$message"
+    echo "Committing changes..."
 
     local datetime=$(date +"%Y-%m-%d %H:%M:%S")
 
