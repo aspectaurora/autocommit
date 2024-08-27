@@ -68,11 +68,13 @@ enforce_consistency() {
     local branch_name="$2"
     local ticket_number=""
 
+    # Adjusted the consistency instructions to preserve the formatting
     local consistency_instructions="Format the following commit message according to these specifications:
     
     - Begin with the appropriate category (e.g., FEAT, BUGFIX, REFACTOR).
     - Include the Jira ticket number if present.
     - The final format should be: CATEGORY:[JIRA_TICKET_NUMBER] A concise summary of changes.
+    - Preserve the structure of the message, including any bullet points or line breaks.
     - Provide only the final commit message without any additional comments or instructions.
     - If ticket number is not present, try to infer it from the branch name: $branch_name
 
@@ -85,8 +87,9 @@ enforce_consistency() {
     if [[ -z "$ticket_number" ]]; then
         refined_message=$(echo "$refined_message" | sed 's/\[\] //')
     fi
-        
-    echo "$refined_message"
+    
+    # Preserve line breaks and ensure the message is passed correctly
+    echo -e "$refined_message"
 }
 
 validate_message() {
@@ -256,12 +259,12 @@ autocommit() {
     else
         raw_message=$(echo "$changes" | sgpt --model gpt-4o-mini --no-cache "$instructions \n\n Important Context: $context")
     fi
-    echo "Raw message:"
-    echo "$raw_message"
     # echo "Enforcing consistency..."
     local message
     # Validate the raw commit message
-    if ! validate_message "$raw_message" "$branch_name"; then
+    if ! $generate_jira && ! $generate_pr && ! validate_message "$raw_message" "$branch_name"; then
+        echo "Raw message:"
+        echo "$raw_message"
         echo "Raw message validation failed."
         
         # Optionally enforce consistency if validation fails
@@ -277,8 +280,8 @@ autocommit() {
     fi
 
     # local message=$(enforce_consistency "$raw_message" "$branch_name")
-    echo "Final message:"
-    echo "$message"
+    # echo "Final message:"
+    # echo "$message"
     echo "Committing changes..."
 
     local datetime=$(date +"%Y-%m-%d %H:%M:%S")
