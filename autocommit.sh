@@ -2,6 +2,7 @@
 #
 # Autocommit - like having a butler for your git commits, only less British (c) Marc Fasel
 # 
+# Version: 1.1
 # This script uses the sgpt command to generate a concise git commit message or Jira ticket based on staged changes or recent commits.
 # It automatically stages and commits the changes with the generated message.
 #
@@ -48,6 +49,7 @@
 # Inspired by:
 # https://medium.com/@marc_fasel/smash-your-git-commit-messages-like-a-champ-using-chatgpt-0cbe8ea7b3df
 
+VERSION="1.1"
 DEFAULT_MODEL="gpt-4o-mini"
 
 # Check if inside a Git repository
@@ -135,8 +137,26 @@ autocommit() {
     local num_commits=""
     local OPTIND opt
 
-    while getopts "c:l:jn:moprM" opt; do
+    while getopts "c:l:jn:moprM:vh" opt; do
         case $opt in
+            v) 
+                echo "autocommit version $VERSION"
+                exit 0
+                ;;
+            h)
+                echo "autocommit version $VERSION"
+                echo "Usage: autocommit [options]"
+                echo "Options:"
+                echo "  -c <context>  Add context to the commit message (e.g., issue number)"
+                echo "  -l <logfile>  Log the commit messages to a file"
+                echo "  -j            Generate a Jira ticket"
+                echo "  -pr           Generate a Pull Request message"
+                echo "  -n <number>   Number of recent commits to consider"
+                echo "  -mo           Message only, do not commit"
+                echo "  -v, --version Display version information"
+                echo "  -h, --help    Show this help message"
+                exit 0
+                ;;                    
             c) context="$OPTARG";;
             l) logfile="$OPTARG";;
             j) generate_jira=true;;
