@@ -48,6 +48,14 @@
 # Inspired by:
 # https://medium.com/@marc_fasel/smash-your-git-commit-messages-like-a-champ-using-chatgpt-0cbe8ea7b3df
 
+DEFAULT_MODEL="gpt-4o-mini"
+
+# Check if inside a Git repository
+if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    echo "Error: Not inside a Git repository."
+    exit 1
+fi
+
 # Check if dependencies are installed
 if ! command -v sgpt &> /dev/null; then
     echo "Error: sgpt is not installed. Please install it using 'pip install shell-gpt'."
@@ -59,6 +67,7 @@ if ! command -v git &> /dev/null; then
     exit 1
 fi
 
+
 get_branch_name() {
     git rev-parse --abbrev-ref HEAD
 }
@@ -66,7 +75,7 @@ get_branch_name() {
 enforce_consistency() {
     local raw_message="$1"
     local branch_name="$2"
-    local ticket_number=""
+    local model="$3"
 
     # Adjusted the consistency instructions to preserve the formatting
     local consistency_instructions="Format the following commit message according to these specifications:
@@ -81,7 +90,7 @@ enforce_consistency() {
     Raw commit message: \"$raw_message\""
 
     # Generate the refined commit message
-    local refined_message=$(echo "$consistency_instructions" | sgpt --model gpt-4o-mini --no-cache)
+    local refined_message=$(echo "$consistency_instructions" | sgpt --model "$model" --no-cache)
 
     # If there was no ticket number, remove the empty brackets
     if [[ -z "$ticket_number" ]]; then
@@ -108,11 +117,6 @@ validate_message() {
         return 1
     fi
 
-    # if [[ -z "$ticket_number" && $message =~ \[.*\] ]]; then
-    #     echo "Validation failed: Commit message contains an empty or invalid ticket number."
-    #     return 1
-    # fi
-
     if [[ $message =~ Based\ on\ the\ changes ]]; then
         echo "Validation failed: Commit message contains unnecessary phrases."
         return 1
@@ -131,7 +135,7 @@ autocommit() {
     local num_commits=""
     local OPTIND opt
 
-    while getopts "c:l:jn:mopr" opt; do
+    while getopts "c:l:jn:moprM" opt; do
         case $opt in
             c) context="$OPTARG";;
             l) logfile="$OPTARG";;
@@ -140,6 +144,7 @@ autocommit() {
             m) message_only=true;;  # Set the flag when -mo is used
             o) ;;  # This is needed to properly handle the 'o' in 'mo'            
             p) generate_pr=true;;
+            M) model="$OPTARG";;
             r) ;;            
             \?) echo "Invalid option -$OPTARG" >&2; return 1;;
         esac
@@ -234,32 +239,24 @@ autocommit() {
                 If brach name starts as 'abd-123-*' use the format 'REFACTOR|FEAT|CHORES|BUGFIX|ETC:[ABD-123] A commit message' \
                 If not, use the format 'REFACTOR|FEAT|CHORES|BUGFIX|ETC: A commit message' \
                 at the start of the message, choosing the most appropriate category. \
-                Current branch: $branch_name"
-                
-            # instructions="Generate a concise git commit message that summarizes the key changes. \
-            #     The message must strictly follow this format: \
-            #     REFACTOR|FEAT|CHORES|BUGFIX|CICD|ETC:[ABD-123] A concise summary of changes \
-            #     \
-            #     - Key change or impact \
-            #     - Another key change or impact \
-            #     - A third key change or impact if necessary \
-            #     \
-            #     Choose the most appropriate category (REFACTOR|FEAT|CHORES|BUGFIX|CICD|ETC). \
-            #     Focus on the overall purpose and impact of the changes, not just technical details. \
-            #     Combine smaller changes into broader, more meaningful descriptions. \
-            #     Ignore any reformatting or minor code cleanup. \
-            #     Ignore the boring reformatting stuff. \
-            #     Current branch: $branch_name"
+                Current branch: $branch_name"                
         fi
     fi
     
+    model="${model:-$DEFAULT_MODEL}"
+
     local raw_message
     if [[ -z "$context" ]]; then
-        raw_message=$(echo "$changes" | sgpt --model gpt-4o-mini --no-cache "$instructions")
+        raw_message=$(echo "$changes" | sgpt --model "$model" --no-cache "$instructions")
     else
-        raw_message=$(echo "$changes" | sgpt --model gpt-4o-mini --no-cache "$instructions \n\n Important Context: $context")
+        raw_message=$(echo "$changes" | sgpt --model "$model" --no-cache "$instructions \n\n Important Context: $context")
     fi
-    # echo "Enforcing consistency..."
+    
+    if [ $? -ne 0 ] || [ -z "$raw_message" ]; then
+        echo "Error: Failed to generate commit message using sgpt."
+        return 1
+    fi
+            
     local message
     # Validate the raw commit message
     if ! $generate_jira && ! $generate_pr && ! validate_message "$raw_message" "$branch_name"; then
@@ -268,7 +265,7 @@ autocommit() {
         echo "Raw message validation failed."
         
         # Optionally enforce consistency if validation fails
-        message=$(enforce_consistency "$raw_message" "$branch_name")
+        message=$(enforce_consistency "$raw_message" "$branch_name" "$model")
     else
         message="$raw_message"
     fi
@@ -279,9 +276,6 @@ autocommit() {
         return 1
     fi
 
-    # local message=$(enforce_consistency "$raw_message" "$branch_name")
-    # echo "Final message:"
-    # echo "$message"
     echo "Committing changes..."
 
     local datetime=$(date +"%Y-%m-%d %H:%M:%S")
