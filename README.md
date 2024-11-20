@@ -44,6 +44,7 @@ Additional options include:
 
 - `-c <context>`: Add a custom context to the commit message.
 - `-l <logfile>`: Specify a logfile to record commit messages.
+- `-j`: Generate a Jira ticket title and description instead of a commit message.
 
 Example:
 
@@ -78,3 +79,4 @@ For the full license text, please see the LICENSE file included in this reposito
 This ensures that users can confidently use, modify, and share Autocommit while understanding their rights and responsibilities under the license.
 
 ### Inspired by:
+

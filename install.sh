@@ -10,9 +10,16 @@ if [ "$(id -u)" != "0" ]; then
 fi
 
 # Copy the autocommit script to the install directory
-cp autocommit "$INSTALL_DIR/autocommit"
+if ! cp autocommit "$INSTALL_DIR/autocommit"; then
+    echo "Error: Failed to copy autocommit to $INSTALL_DIR."
+    exit 1
+fi
 
 # Make sure the script is executable
-chmod +x "$INSTALL_DIR/autocommit"
+if ! chmod +x "$INSTALL_DIR/autocommit"; then
+    echo "Error: Failed to make autocommit executable."
+    exit 1
+fi
 
 echo "Autocommit has been successfully installed. You can now use it by typing 'autocommit' in your terminal."
+
