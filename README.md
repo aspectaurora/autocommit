@@ -1,82 +1,175 @@
 # Autocommit
 
-Autocommit automates the process of committing changes in your git repository by generating meaningful commit messages based on the staged changes. This tool leverages the sgpt command to analyze your changes and create concise, relevant commit messages, simplifying your git workflow.
+**Autocommit** is a Bash script designed to streamline your Git workflow by automatically generating concise commit messages, Jira tickets, or Pull Request (PR) descriptions based on your staged changes or recent commits. Leveraging the power of AI through `sgpt`, it ensures that your commit messages are both meaningful and standardized.
+
+## Table of Contents
+
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Options](#options)
+- [Examples](#examples)
+- [Logging](#logging)
+- [Contributing](#contributing)
+- [License](#license)
+- [Inspiration](#inspiration)
 
 ## Features
 
-- **Automatic Commit Messages**: Autocommit uses the sgpt command to analyze staged changes and generate commit messages that accurately reflect the key modifications. This feature helps maintain a clear and meaningful project history without the need for manual message composition.
+- **Automatic Message Generation:** Generates commit messages, Jira tickets, or PR descriptions using AI.
+- **Customizable Context:** Add contextual information to enhance message relevance.
+- **Logging Capability:** Optionally log generated messages to a specified file.
+- **Model Selection:** Choose the AI model (`sgpt`) version for message generation.
+- **Interactive Mode:** Review and confirm messages before committing.
 
-- **Custom Context**: You can add a custom context (e.g., issue or task numbers) to your commit messages. This is particularly useful for linking commits to specific work items or issues in your project management tools.
+## Prerequisites
 
-- **Logging**: Autocommit supports logging all generated commit messages to a specified file. This can be invaluable for record-keeping, auditing, or simply keeping track of changes over time.
+Before installing and using Autocommit, ensure that you have the following dependencies installed:
+
+- [Git](https://git-scm.com/) (version X.X.X or higher)
+- [Python](https://www.python.org/) (version X.X or higher)
+- [`sgpt`](https://github.com/user/shell-gpt) (installable via pip)
 
 ## Installation
 
-To install Autocommit, follow these steps:
+### Using the Install Script
 
-1. Clone this repository:
-
-```bash
-git clone https://github.com/aspectaurora/autocommit.git
-```
-
-2. Navigate to the cloned directory:
+1. **Clone the Repository:**
 
 ```bash
+git clone https://github.com/yourusername/autocommit.git
 cd autocommit
 ```
 
-3. Run the installation script with root privileges:
+2. **Run the Install Script:**
 
 ```bash
-sudo bash install.sh
+chmod +x install.sh
+./install.sh
+```
+
+This script will:
+• Copy `autocommit.sh` to `/usr/local/bin/autocommit`.
+• Set executable permissions.
+• Optionally add the script to your shell profile for function-based usage.
+
+3. **Reload Your Shell Profile:**
+
+```bash
+source ~/.bashrc # For Bash users
+source ~/.zshrc # For Zsh users
+```
+
+### Manual Installation
+
+1. **Copy the Script to a Directory in Your PATH:**
+
+```bash
+sudo cp autocommit.sh /usr/local/bin/autocommit
+```
+
+2. **Make the Script Executable:**
+
+```bash
+sudo chmod +x /usr/local/bin/autocommit
+```
+
+3. **Optionally, Add to Shell Profile for Function-Based Usage:**
+
+If you prefer to use autocommit as a shell function, add the following line to your shell profile (~/.bashrc or ~/.zshrc):
+
+```bash
+source /usr/local/bin/autocommit
+```
+
+Then, reload your shell profile:
+
+```bash
+source ~/.bashrc # For Bash users
+source ~/.zshrc # For Zsh users
 ```
 
 ## Usage
 
-To use Autocommit, navigate to your git repository and run:
+Run the autocommit command within your Git repository to generate commit messages, Jira tickets, or PR descriptions based on your staged changes or recent commits.
+
+```bash
+autocommit [options]
+```
+
+## Options
+
+| Flag         | Description                                                                 |
+| ------------ | --------------------------------------------------------------------------- |
+| -c <context> | Add context to the commit message (e.g., issue number)                      |
+| -l <logfile> | Log the commit messages to a file                                           |
+| -j           | Generate a Jira ticket title and description instead of a commit message    |
+| -p           | Generate a Pull Request title and description instead of a commit message   |
+| -n <number>  | Number of recent commits to consider (if not provided, uses staged changes) |
+| -m           | Message only, do not commit                                                 |
+| -M <model>   | Specify the AI model for sgpt (default: gpt-4o-mini)                        |
+| -v           | Display version information                                                 |
+| -h           | Show the help message                                                       |
+
+## Examples
+
+**Standard Commit Message Generation**
+
+Generate a commit message based on staged changes:
 
 ```bash
 autocommit
 ```
 
-Additional options include:
+**Commit with Context and Logging**
 
-- `-c <context>`: Add a custom context to the commit message.
-- `-l <logfile>`: Specify a logfile to record commit messages.
-- `-j`: Generate a Jira ticket title and description instead of a commit message.
-
-Example:
+Add context to the commit message and log it to a file:
 
 ```bash
 autocommit -c "Fixes issue #123" -l ~/logs/autocommit.log
 ```
 
-For more examples and detailed usage instructions, refer to the [Usage](#usage) section.
+**Generate a Jira Ticket**
 
-## Troubleshooting
+Create a Jira ticket based on staged changes:
 
-Encountering issues with Autocommit can be frustrating, but here are a few steps to help diagnose and resolve the most common problems:
+```bash
+autocommit -j
+```
 
-1. **Verify Dependencies**: Ensure that both `git` and `sgpt` are installed on your system. You can check this by running `git --version` and `sgpt --version` in your terminal. If either command is not recognized, you will need to install the missing software.
+**Generate a Pull Request Description**
 
-2. **Check for Permission Errors**: If you encounter permission errors during installation or execution, make sure you have the necessary permissions to install scripts in the target directory and to execute the Autocommit script. Running the installation script with `sudo` can resolve most permission issues.
+Create a Pull Request description based on recent commits:
 
-3. **Review Installation Steps**: If Autocommit is not working as expected, revisit the installation steps in this document to ensure all steps were followed correctly. Missing a step or executing commands in the wrong order can lead to issues.
+```bash
+autocommit -p -n 5
+```
 
-4. **Consult the Log File**: If you're using the logging feature, check the log file for error messages or commit failures. This can provide clues to what might be going wrong.
+**Message Only Mode**
 
-5. **Check Git Repository Status**: Autocommit works within the context of a git repository. Ensure you're running Autocommit in a directory that is part of a git repository and that there are staged changes to commit.
+Generate a commit message without committing:
 
-If you've gone through these steps and are still experiencing issues, please visit the GitHub issues page for Autocommit and search for similar problems or open a new issue with a detailed description of your problem.
+```bash
+autocommit -m
+```
+
+**Logging**
+
+If the -l option is used, Autocommit will log the generated messages along with timestamps to the specified logfile. Ensure that the directory for the logfile exists or let Autocommit create it.
+
+```bash
+autocommit -c "Add new feature" -l ~/logs/autocommit.log
+```
+
+## Contributing
+
+Contributions are welcome! Please fork the repository and submit a pull request for any enhancements or bug fixes.
 
 ## License
 
-Autocommit is released under the MIT License, a permissive free software license that allows for private, commercial, and open-source use. The MIT License also permits modification and distribution of the software under the same license.
+This project is licensed under the MIT License. See the [LICENSE](/LICENSE.md) file for details.
 
-For the full license text, please see the LICENSE file included in this repository or visit [MIT License](https://opensource.org/licenses/MIT) on the Open Source Initiative website.
+## Inspiration
 
-This ensures that users can confidently use, modify, and share Autocommit while understanding their rights and responsibilities under the license.
-
-### Inspired by:
-
+Inspired by [Smash Your Git Commit Messages Like a Champ Using ChatGPT](https://medium.com/@marc_fasel/smash-your-git-commit-messages-like-a-champ-using-chatgpt-0cbe8ea7b3df) by [Marc Fasel](https://medium.com/@marc_fasel).
