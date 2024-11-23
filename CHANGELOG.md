@@ -1,5 +1,69 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.2] - 2024-11-23
+
+### Added
+
+#### Installation Script:
+
+- Automated installation process with options for function-based or executable command setup.
+- Shell profile detection for Bash and Zsh, facilitating easy sourcing of the script.
+- User prompts to choose installation type, enhancing flexibility and user control.
+
+#### Enhanced Prompts:
+
+- Refined instructions for generating commit messages, Jira tickets, and Pull Requests to ensure output consistency.
+- Inclusion of explicit directives to generate only the desired messages without additional explanatory text.
+- Added example formats within prompts to guide AI response formatting.
+
+#### Logging Capability:
+
+- Conditional logging feature allowing users to log generated messages along with timestamps to a specified logfile using the `-l` flag.
+
+#### Interactive Features:
+
+- Enhanced `README.md` with comprehensive usage examples and detailed option explanations.
+- Function-based and executable command installations to cater to diverse user preferences.
+
+### Changed
+
+#### Shebang Update:
+
+- Changed from `#!/bin/bash` to `#!/usr/bin/env` bash for improved portability across different Unix-like systems.
+
+#### Option Parsing:
+
+- Improved option parsing in `autocommit.sh` using `getopts` to handle command-line arguments more effectively.
+- Corrected option flags from `-mo` to `-m` (Message Only) and `-p` (Pull Request) to prevent ambiguity and ensure proper functionality.
+
+#### Error Handling:
+
+- Enhanced error handling for branch name retrieval, ensuring the script gracefully exits with informative messages if the branch name cannot be determined.
+- Improved validation logic to enforce commit message standards and consistency without introducing unwanted text.
+
+#### Script Structure:
+
+- Modularization of instruction prompts for commits, Jira tickets, and PRs to promote maintainability and scalability.
+- Added inline comments and function descriptions within `autocommit.sh` to improve readability and ease future modifications.
+
+### Fixed
+
+#### Option Flags:
+
+- Resolved conflicts in option parsing by removing the unused `-o` flag and properly handling the `-p` flag for Pull Requests.
+
+#### Consistency Enforcement:
+
+- Ensured that the `enforce_consistency` function outputs only the refined commit message without any additional comments or summaries.
+
+#### Logging Errors:
+
+- Addressed potential issues in logging mechanisms to ensure that messages are correctly appended to log files without permission or path errors.
+
 ## [1.1] - 2024-11-20
 
 ### Added
