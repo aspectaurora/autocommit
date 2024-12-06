@@ -50,7 +50,7 @@
 # https://medium.com/@marc_fasel/smash-your-git-commit-messages-like-a-champ-using-chatgpt-0cbe8ea7b3df
 
 VERSION="1.2"
-DEFAULT_MODEL="gpt-4o-mini"
+DEFAULT_MODEL="gpt-4o-mini"  # This can be overridden by .autocommitrc
 
 JIRA_INSTRUCTIONS="
     Generate a Jira ticket title and description.
@@ -146,11 +146,41 @@ CONSISTENCY_INSTRUCTIONS="
     - **Provide only the final commit message**
     - **Do not include any introductory or concluding sentences.**"    
 
+# Load configuration from .autocommitrc file if present
+function load_config() {
+    local repo_root
+    # Determine repository root
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [[ $? -ne 0 || -z "$repo_root" ]]; then
+        echo "Warning: Could not determine repository root. Skipping repository-level config."
+    fi
+
+    # Check for config in repo root
+    if [[ -n "$repo_root" && -f "$repo_root/.autocommitrc" ]]; then
+        source "$repo_root/.autocommitrc"
+        echo "Loaded configuration from $repo_root/.autocommitrc"
+        return
+    fi
+
+    # If not found in repo root, check home directory
+    if [[ -f "$HOME/.autocommitrc" ]]; then
+        source "$HOME/.autocommitrc"
+        echo "Loaded configuration from $HOME/.autocommitrc"
+        return
+    fi
+
+    # If no config file is found, proceed with defaults
+    echo "No .autocommitrc configuration file found. Using default settings."
+}
+
 # Check if inside a Git repository
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
     echo "Error: Not inside a Git repository."
     exit 1
 fi
+
+# Load configuration before checking dependencies so config can specify alternative paths or models
+load_config
 
 # Check if dependencies are installed
 if ! command -v sgpt &> /dev/null; then

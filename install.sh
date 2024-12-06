@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # install.sh - Installation script for Autocommit
-# This script installs autocommit.sh to /usr/local/bin and sets up necessary configurations.
+# Now also sets up a template ~/.autocommitrc if none exists.
+#
 
 set -e
 
@@ -52,4 +53,19 @@ if [[ ":$PATH:" != *":$TARGET_DIR:"* ]]; then
     print_message "Added $TARGET_DIR to PATH in $SHELL_PROFILE. Please reload your shell or run 'source $SHELL_PROFILE' to update PATH."
 fi
 
-print_message "Autocommit has been installed as an executable command!"
+# Create a template ~/.autocommitrc if it doesn't exist
+if [ ! -f "$HOME/.autocommitrc" ]; then
+    print_message "No ~/.autocommitrc found. Creating a template..."
+    cat <<EOF > "$HOME/.autocommitrc"
+# ~/.autocommitrc - Configuration file for Autocommit
+#
+# Uncomment and set this variable to change the default model:
+# export DEFAULT_MODEL="gpt-4o-mini"
+#
+EOF
+    print_message "A template ~/.autocommitrc has been created. You can customize it according to your needs."
+else
+    print_message "~/.autocommitrc already exists. Skipping template creation."
+fi
+
+print_message "Autocommit has been installed successfully as an executable command!"
