@@ -2,24 +2,16 @@
 #
 # uninstall.sh - Uninstallation script for Autocommit
 #
-# This script removes the autocommit command and optionally cleans up
-# the configuration file and PATH modifications.
-#
-# Usage:
-# ./uninstall.sh
-#
-# It will:
-# - Remove /usr/local/bin/autocommit
-# - Prompt to remove ~/.autocommitrc
-# - Prompt to remove PATH modifications from shell profile files
+# This script removes Autocommit by:
+# - Removing the symlink at /usr/local/bin/autocommit
+# - Removing the /usr/local/share/autocommit directory
+# - Optionally removing ~/.autocommitrc and PATH modifications
 
 set -e
 
-# Variables
-TARGET_DIR="/usr/local/bin"
-TARGET_PATH="$TARGET_DIR/autocommit"
+INSTALL_DIR="/usr/local/share/autocommit"
+BIN_PATH="/usr/local/bin/autocommit"
 
-# Function to display messages
 print_message() {
     echo "========================================"
     echo "$1"
@@ -28,25 +20,33 @@ print_message() {
 
 print_message "Autocommit Uninstallation"
 
-# Check if the autocommit command exists
-if [ ! -f "$TARGET_PATH" ]; then
-    echo "Autocommit not found at $TARGET_PATH. It may not be installed."
-    exit 0
-fi
-
-# Confirm removal of autocommit executable
-read -p "Are you sure you want to remove the Autocommit executable from $TARGET_PATH? [y/N]: " confirm_remove
-if [[ "$confirm_remove" =~ ^[Yy]$ ]]; then
-    sudo rm -f "$TARGET_PATH"
-    echo "Removed $TARGET_PATH."
+if [ ! -L "$BIN_PATH" ]; then
+    echo "Autocommit symlink not found at $BIN_PATH. It may already be uninstalled."
 else
-    echo "Autocommit uninstallation aborted."
-    exit 0
+    read -p "Remove the Autocommit symlink at $BIN_PATH? [y/N]: " confirm_symlink
+    if [[ "$confirm_symlink" =~ ^[Yy]$ ]]; then
+        sudo rm -f "$BIN_PATH"
+        echo "Removed symlink $BIN_PATH."
+    else
+        echo "Kept symlink. Uninstallation halted."
+        exit 0
+    fi
 fi
 
-# Offer to remove ~/.autocommitrc
+if [ -d "$INSTALL_DIR" ]; then
+    read -p "Remove Autocommit installation directory at $INSTALL_DIR? [y/N]: " confirm_dir
+    if [[ "$confirm_dir" =~ ^[Yy]$ ]]; then
+        sudo rm -rf "$INSTALL_DIR"
+        echo "Removed $INSTALL_DIR."
+    else
+        echo "Kept $INSTALL_DIR. Uninstallation incomplete."
+    fi
+else
+    echo "No directory found at $INSTALL_DIR. Skipping."
+fi
+
 if [ -f "$HOME/.autocommitrc" ]; then
-    read -p "Do you want to remove the ~/.autocommitrc configuration file? [y/N]: " confirm_rc
+    read -p "Remove ~/.autocommitrc file? [y/N]: " confirm_rc
     if [[ "$confirm_rc" =~ ^[Yy]$ ]]; then
         rm -f "$HOME/.autocommitrc"
         echo "Removed ~/.autocommitrc."
@@ -55,34 +55,10 @@ if [ -f "$HOME/.autocommitrc" ]; then
     fi
 fi
 
-# Offer to remove PATH modifications from known shell profiles
-# We'll search for the comment line added during install
-CONFIG_COMMENT="# Add /usr/local/bin to PATH for Autocommit"
-MOD_LINE='export PATH="$PATH:/usr/local/bin"'
-
-remove_path_modification() {
-    local file="$1"
-    if [ -f "$file" ]; then
-        # Check if the file contains the autocommit PATH modifications
-        if grep -q "$CONFIG_COMMENT" "$file"; then
-            read -p "Remove Autocommit PATH modifications from $file? [y/N]: " confirm_path
-            if [[ "$confirm_path" =~ ^[Yy]$ ]]; then
-                # Use sed to remove the lines
-                sed -i.bak "/$CONFIG_COMMENT/d" "$file"
-                sed -i.bak "/$MOD_LINE/d" "$file"
-                rm -f "$file.bak"
-                echo "Removed PATH modifications from $file."
-            else
-                echo "Kept PATH modifications in $file."
-            fi
-        fi
-    fi
-}
-
-remove_path_modification "$HOME/.zshrc"
-remove_path_modification "$HOME/.bashrc"
-remove_path_modification "$HOME/.bash_profile"
-remove_path_modification "$HOME/.profile"
+# Note: Removing PATH modifications from user shell profiles is optional and risky.
+# The user might have other entries in their PATH. Unless you strictly restore backups,
+# it's best just to inform the user to manually edit their PATH if desired.
+# For safety, we won't automatically remove PATH modifications here.
 
 print_message "Autocommit has been uninstalled."
-echo "If you removed PATH modifications, please open a new terminal session or reload your shell."
+echo "If needed, remove any PATH modifications manually from your shell profiles."
