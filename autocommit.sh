@@ -1,47 +1,49 @@
 #!/usr/bin/env bash
 #
-# Autocommit - like having a butler for your git commits, only less British (c) Marc Fasel
+# Autocommit - A helper for automatically generating commit messages, Jira tickets, and PR descriptions using AI.
+# Like having a butler for your git commits, only less British (c) Marc Fasel
 # 
 # Version: 1.2
+#
 # This script uses the sgpt command to generate a concise git commit message or Jira ticket based on staged changes or recent commits.
 # It automatically stages and commits the changes with the generated message.
 #
 # Usage:
-# autocommit [-c <context>] [-l <logfile>] [-j] [-n <number_of_commits>] [-m]
+#   autocommit [-c <context>] [-l <logfile>] [-j] [-n <number_of_commits>] [-m]
 #
 # Options:
-# -c <context>  Add a context to the commit message (e.g., the issue number)
-# -l <logfile>  Log the commit messages to a file
-# -j            Generate a Jira ticket title and description instead of a commit message
-# -p           Generate a Pull Request title and description instead of a commit message
-# -n <number>   Number of recent commits to consider (if not provided, uses staged changes)
-# -m           Message only, do not commit
+#   -c <context>   Add context (e.g., issue number) to the commit message.
+#   -l <logfile>   Log the commit messages to a file.
+#   -j             Generate a Jira ticket instead of a commit message.
+#   -p             Generate a Pull Request message instead of a commit message.
+#   -n <number>     Analyze the last <number> commits instead of staged changes.
+#   -m             Print the generated message only, do not commit.
+#   -M <model>      Specify the AI model for sgpt (overrides DEFAULT_MODEL in .autocommitrc).
+#   -v, --version   Display version information.
+#   -h, --help      Show this help message.
 #
 # Examples:
-# autocommit
-# autocommit -c "Fixes issue #123"
-# autocommit -c "Fixes issue #123" -l ~/logs/autocommit.log
-# autocommit -j
-# autocommit -p
-# autocommit -n 10
-# autocommit -m
+#   autocommit
+#   autocommit -c "Fixes issue #123"
+#   autocommit -c "Fixes issue #123" -l ~/logs/autocommit.log
+#   autocommit -j
+#   autocommit -p
+#   autocommit -n 10
+#   autocommit -m
 #
 # Dependencies:
 # - sgpt
 # - git
 #   
 # Installation:
-# 1. Install sgpt:
-#    $ pip install shell-gpt
-# 2. Add this script to your shell profile (e.g. .bashrc, .zshrc):
-#    source /path/to/autocommit.sh
-# 3. Reload your shell profile:
-#    $ source ~/.zshrc
-# 4. Use the autocommit command in your git repositories:
-#    $ autocommit
+#   See README.md for detailed instructions and usage examples.
 #
-# Note: This script is a simple example and may need to be adapted to your specific requirements.
-#   It is recommended to test it in a safe environment before using it in production.
+# Note:
+#   This script looks for configuration in either the project's root directory (.autocommitrc)
+#   or the user's home directory (~/.autocommitrc). Default settings are used if none found.
+#
+#   This script is a simple example and may need to be adapted to your specific requirements.
+#   Test in a safe environment before using in production.
 #   Use at your own risk.
 #
 # License: MIT
