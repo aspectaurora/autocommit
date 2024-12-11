@@ -112,3 +112,82 @@ function enforce_consistency() {
 
     echo -e "$refined_message"
 }
+
+# Generate a commit message using sgpt
+function generate_message() {
+    # Parameters:
+    # $1: generate_jira (true/false)
+    # $2: generate_pr (true/false)
+    # $3: message_only (true/false)
+    # $4: num_commits
+    # $5: context (additional user context)
+    # $6: model (AI model)
+    local generate_jira="$1"
+    local generate_pr="$2"
+    local message_only="$3"
+    local num_commits="$4"
+    local user_context="$5"
+    local model="$6"
+
+    local branch_name=$(get_branch_name)
+    echo "Branch: $branch_name"
+
+    local changes
+    if [[ -n "$num_commits" ]]; then
+        changes=$(git log -n "$num_commits" --pretty=format:"%h %s")
+        echo "Analyzing $num_commits recent commits"
+    else
+        changes=$(git diff --staged)
+        echo "Analyzing staged changes"
+    fi
+
+    # Handle no changes
+    if [[ -z "$changes" ]]; then
+        echo "No changes to commit"
+        return 1
+    fi
+
+    local role="You are Autocommit Assistant"
+    if [[ -n "$num_commits" ]]; then
+        changes="Recent commits: $changes"
+    else
+        changes="Staged changes: $changes"
+    fi
+
+    local instructions
+    if $generate_jira; then
+        instructions="$role \n\n$JIRA_INSTRUCTIONS\n\n$changes"
+    elif $generate_pr; then
+        instructions="$role \n\n$PR_INSTRUCTIONS\n\n- Use the current branch name for context: $branch_name.\n- Use the extracted Jira ticket number: \$ticket_number (if available).\n\n$changes"
+    else
+        instructions="$role \n\n$COMMIT_INSTRUCTIONS\n\n- Use the current branch name for context: $branch_name.\n- Use the extracted Jira ticket number: \$ticket_number (if available).\n\n$changes"
+    fi
+
+    local prompt="$instructions"
+    if [[ -n "$user_context" ]]; then
+        prompt="$prompt\n\n**THE LATEST CONTEXT**: $user_context"
+    fi
+
+    local raw_message
+    raw_message=$(echo "$changes" | sgpt --model "$model" --no-cache "$prompt" 2>/dev/null)
+    if [ $? -ne 0 ] || [ -z "$raw_message" ]; then
+        echo "Error: Failed to generate message using sgpt."
+        return 1
+    fi
+
+    # If it's a commit message (not jira/pr), validate it
+    local message="$raw_message"
+    if ! $generate_jira && ! $generate_pr; then
+        if ! validate_message "$raw_message" "$branch_name"; then
+            echo "Raw message validation failed."
+            message=$(enforce_consistency "$raw_message" "$branch_name" "$model")
+            if [[ -z "$message" ]]; then
+                echo "Error: Could not refine commit message."
+                return 1
+            fi
+        fi
+    fi
+
+    echo "$message"
+    return 0
+}
