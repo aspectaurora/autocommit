@@ -1,6 +1,6 @@
 # lib/prompts.sh
 # This file contains the prompt instructions used by Autocommit.
-JIRA_INSTRUCTIONS="
+JIRA_INSTRUCTIONS="JIRA_INSTRUCTIONS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     Generate a Jira ticket title and description.
 
     **Requirements:**
@@ -21,9 +21,10 @@ JIRA_INSTRUCTIONS="
     **Example:**
     
     Title: FEAT: Implement user authentication
-    Description: Add user login and registration functionality using OAuth 2.0. Ensure secure password storage and session management."
+    Description: Add user login and registration functionality using OAuth 2.0. Ensure secure password storage and session management.
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< JIRA_INSTRUCTIONS END"
 
-PR_INSTRUCTIONS="
+PR_INSTRUCTIONS="PR_INSTRUCTIONS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     Create a Pull Request title and description.
 
     **Requirements:**
@@ -51,9 +52,10 @@ PR_INSTRUCTIONS="
     **Example:**
     
     Title: FEAT: [ABC-123] Add user authentication
-    Description: Implemented OAuth 2.0 for user login and registration. Ensured secure password storage and session management."
+    Description: Implemented OAuth 2.0 for user login and registration. Ensured secure password storage and session management.
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< PR_INSTRUCTIONS END"
 
-COMMIT_INSTRUCTIONS="
+COMMIT_INSTRUCTIONS="COMMIT INSTRUCTIONS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     Generate a concise git commit message summarizing the key changes.
 
     **Requirements:**
@@ -79,9 +81,11 @@ COMMIT_INSTRUCTIONS="
     
     **Example:**
     
-    FEAT:[ABC-123] Implement user authentication using OAuth 2.0."
+    FEAT:[ABC-123] Implement user authentication using OAuth 2.0.
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< COMMIT INSTRUCTIONS END
+"
 
-CONSISTENCY_INSTRUCTIONS="
+CONSISTENCY_INSTRUCTIONS="CONSISTENCY INSTRUCTIONS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     Format the following commit message according to these specifications:
 
     - Begin with the appropriate category (e.g., FEAT, BUGFIX, REFACTOR).
@@ -92,4 +96,5 @@ CONSISTENCY_INSTRUCTIONS="
     **IMPORTANT:**
 
     - **Provide only the final commit message**
-    - **Do not include any introductory or concluding sentences.**"    
+    - **Do not include any introductory or concluding sentences.**
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< CONSISTENCY INSTRUCTIONS END"
