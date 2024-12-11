@@ -75,7 +75,7 @@ function validate_message() {
     if [[ $branch_name =~ ([A-Z]+-[0-9]+) ]]; then
         ticket_number="${BASH_REMATCH[1]}"
     fi
-    echo "Ticket number: $ticket_number"
+    # echo "Ticket number: $ticket_number"
 
     # Basic validation rules
     if [[ ! $message =~ ^[A-Z] ]]; then
@@ -170,22 +170,48 @@ function generate_message() {
         role="You are an intelligent assistant specializing in creating concise and descriptive Git commit messages."
     fi
 
+    # if [[ -n "$num_commits" ]]; then
+    #     changes="RECENT COMMITS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\n$changes\n\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< RECENT COMMITS END"
+    # else
+    #     changes="STAGED CHANGES START >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\n$changes\n\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< STAGED CHANGES END"
+    # fi
+
     if [[ -n "$num_commits" ]]; then
         changes="RECENT COMMITS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\n$changes\n\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< RECENT COMMITS END"
     else
-        changes="STAGED CHANGES START >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\n$changes\n\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< STAGED CHANGES END"
+        local files
+        files=$(git diff --name-only --staged) # Extract list of staged files
+        local file_analysis
+        file_analysis=$(classify_changes "$files")
+        local diffs
+        diffs=$(summarize_diffs "$files")
+        # echo "File Analysis:\n$file_analysis"        
+        # echo "Diffs:\n$diffs"
+        changes="STAGED CHANGES >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\n$file_analysis\n\nSummarized Diffs:\n$diffs\n\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< STAGED CHANGES END"
     fi
 
-
+    local metadata
+    # metadata=$(extract_metadata)
+    
     local instructions
     local additional_params_message="- Use the current branch name for context: $branch_name.\n- Use the extracted Jira ticket number: $ticket_number (if available)."
     if $generate_jira; then
-        instructions="$role\n\n$changes\n\n$JIRA_INSTRUCTIONS"
+        instructions="$role\n\n$changes\n\n$metadata\n\n$JIRA_INSTRUCTIONS"
     elif $generate_pr; then
-        instructions="$role\n\n$changes\n\n$PR_INSTRUCTIONS\n\n$additional_params_message"
+        instructions="$role\n\n$changes\n\n$metadata\n\n$PR_INSTRUCTIONS\n\n$additional_params_message"
     else
-        instructions="$role\n\n$changes\n\n$COMMIT_INSTRUCTIONS\n\n$additional_params_message"
+        instructions="$role\n\n$changes\n\n$metadata\n\n$COMMIT_INSTRUCTIONS\n\n$additional_params_message"
     fi
+
+    # local instructions
+    # local additional_params_message="- Use the current branch name for context: $branch_name.\n- Use the extracted Jira ticket number: $ticket_number (if available)."
+    # if $generate_jira; then
+    #     instructions="$role\n\n$changes\n\n$JIRA_INSTRUCTIONS"
+    # elif $generate_pr; then
+    #     instructions="$role\n\n$changes\n\n$PR_INSTRUCTIONS\n\n$additional_params_message"
+    # else
+    #     instructions="$role\n\n$changes\n\n$COMMIT_INSTRUCTIONS\n\n$additional_params_message"
+    # fi
     # echo "Instructions: $instructions"
 
     local prompt="$instructions"
@@ -213,14 +239,90 @@ function generate_message() {
         fi
     fi
     
-    $verbose && echo "[Verbose] Generated message:"
-    local title="Commit Message"
-    if $generate_jira; then
-        title="Jira Ticket Description"
-    elif $generate_pr; then
-        title="Pull Request Description"
-    fi
-    echo "____________________________________ $title ____________________________________"
-    echo "$message"
+    $verbose && echo "[Verbose] Generated message:"    
+    echo -e "$message"
     return 0
+}
+
+function classify_changes() {
+    local files="$1"
+    local tests=""
+    local src=""
+    local docs=""
+    local others=""
+
+    while read -r file; do
+        if [[ $file =~ \.(test|spec)\.(js|ts|jsx|tsx)$ ]]; then
+            tests+="$file\n"
+        elif [[ $file =~ \.(js|ts|jsx|tsx|py|go|java|cpp|c)$ ]]; then
+            src+="$file\n"
+        elif [[ $file =~ \.(md|rst)$ ]]; then
+            docs+="$file\n"
+        else
+            others+="$file\n"
+        fi
+    done <<< "$files"
+    local summary=""
+    if [[ -n "$tests" ]]; then
+        summary+="Tests:\n$tests\n"
+    fi
+    if [[ -n "$src" ]]; then
+        summary+="Source Files:\n$src\n"
+    fi
+    if [[ -n "$docs" ]]; then
+        summary+="Documentation:\n$docs\n"
+    fi
+    if [[ -n "$others" ]]; then
+        summary+="Other Changes:\n$others\n"
+    fi
+    echo -e "$summary"
+}
+
+function summarize_diffs() {
+    local files="$1"
+    local summary=""
+    for file in $files; do
+        local max_lines=100
+        
+        # local total_lines
+        # total_lines=$(git diff --staged "$file" | wc -l)
+        
+        # # Adjust lines dynamically
+        # if (( total_lines > 50 )); then
+        #     max_lines=20
+        # elif (( total_lines > 20 )); then
+        #     max_lines=10
+        # else
+        #     max_lines=$total_lines
+        # fi
+        
+        # Adjust lines based on file type
+        if [[ $file =~ \.(test|spec)\.(js|ts|jsx|tsx)$ ]]; then
+            max_lines=5
+        elif [[ $file =~ \.(js|ts|jsx|tsx|py|go|java|cpp|c)$ ]]; then
+            max_lines=100
+        # elif [[ $file =~ \.(md|rst)$ ]]; then
+        #     max_lines=15
+        else
+            max_lines=50
+        fi        
+        
+        # Extract the diff
+        diff=$(git diff --staged "$file" | head -n $max_lines)
+        summary+="$diff\n\n"
+    done
+    echo -e "$summary"
+}
+
+function extract_metadata() {
+    local repo_root
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    local metadata=""
+    if [[ -f "$repo_root/CHANGELOG.md" ]]; then
+        metadata+="Recent Changes from CHANGELOG.md:\n$(head -n 10 "$repo_root/CHANGELOG.md")\n\n"
+    fi
+    if [[ -f "$repo_root/package.json" ]]; then
+        metadata+="Project Metadata from package.json:\n$(jq . "$repo_root/package.json")\n\n"
+    fi
+    echo -e "$metadata"
 }

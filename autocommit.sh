@@ -156,7 +156,7 @@ function autocommit() {
         local jira_message
         jira_message=$(generate_message true false "$num_commits" "$context" "$model" "$verbose")                                    
         [ $? -eq 0 ] || return 1
-        echo "Generated Jira ticket suggestion:"
+        echo "____________________________________ Jira Ticket Description ____________________________________"         
         echo "$jira_message"  
         if [[ -n "$logfile" ]]; then
             mkdir -p "$(dirname "$logfile")"
@@ -170,7 +170,7 @@ function autocommit() {
         local pr_message
         pr_message=$(generate_message false true "$num_commits" "$context" "$model" "$verbose")
         [ $? -eq 0 ] || return 1
-        echo "Generated Pull Request suggestion:"
+        echo "____________________________________ Pull Request Description ____________________________________"         
         echo "$pr_message"
         if [[ -n "$logfile" ]]; then
             mkdir -p "$(dirname "$logfile")"
@@ -185,7 +185,8 @@ function autocommit() {
         commit_message=$(generate_message false false "$num_commits" "$context" "$model" "$verbose")
         [ $? -eq 0 ] || return 1
 
-        $verbose && echo "[Verbose] Commit message generated:\n$commit_message"
+        echo "____________________________________ Commit Message ____________________________________" 
+        echo "$commit_message"
 
         if [[ -n "$num_commits" ]]; then
             local successMessage="$datetime - Generated commit message based on recent commits:"
@@ -199,8 +200,6 @@ function autocommit() {
             return 0
         else            
             if $message_only; then
-                echo "Message-only mode enabled. Printing commit message:"
-                echo "$commit_message"
                 return 0
             fi
             local successMessage="$datetime - Commit successful: $commit_message"
