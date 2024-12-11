@@ -2,4 +2,4 @@
 # Example configuration options
 
 # Override the default model for sgpt
-export DEFAULT_MODEL="gpt-4"
+export DEFAULT_MODEL="gpt-4o-mini"

@@ -61,11 +61,12 @@ function show_help() {
     echo "  autocommit -p"
     echo "  autocommit -n 10"
     echo "  autocommit -m"
+    echo "  autocommit -V"
 }
 
 # Validate commit message
 function validate_message() {
-    echo "Validating commit message..."
+    # echo "Validating commit message..."
     local message="$1"
     local branch_name="$2"
     local ticket_number=""
@@ -86,7 +87,7 @@ function validate_message() {
         echo "Validation failed: Commit message contains unnecessary phrases."
         return 1
     fi
-    echo "Validation passed."
+    # echo "Validation passed."
     return 0
 }
 
@@ -118,27 +119,40 @@ function generate_message() {
     # Parameters:
     # $1: generate_jira (true/false)
     # $2: generate_pr (true/false)
-    # $3: message_only (true/false)
-    # $4: num_commits
-    # $5: context (additional user context)
-    # $6: model (AI model)
+    # $3: num_commits
+    # $4: context (additional user context)
+    # $5: model (AI model)
+    # $6: verbose (true/false)
     local generate_jira="$1"
-    local generate_pr="$2"
-    local message_only="$3"
-    local num_commits="$4"
-    local user_context="$5"
-    local model="$6"
+    local generate_pr="$2"    
+    local num_commits="$3"
+    local user_context="$4"
+    local model="$5"
+    local verbose="$6"
 
-    local branch_name=$(get_branch_name)
-    echo "Branch: $branch_name"
+    local branch_name=$(get_branch_name)    
+    # if branch name is not empty, extract ticket number from it
+    local ticket_number=""
+    if [[ $branch_name =~ ([A-Z]+-[0-9]+) ]]; then
+        ticket_number="${BASH_REMATCH[1]}"
+    fi
+
+    if $verbose; then
+        echo "[Verbose] Starting generate_message with params:"
+        echo "  generate_jira: $generate_jira"
+        echo "  generate_pr: $generate_pr"        
+        echo "  num_commits: $num_commits"
+        echo "  user_context: $user_context"
+        echo "  model: $model"
+        echo "  verbose: $verbose"
+        echo "  Branch: $branch_name"
+    fi
 
     local changes
     if [[ -n "$num_commits" ]]; then
         changes=$(git log -n "$num_commits" --pretty=format:"%h %s")
-        echo "Analyzing $num_commits recent commits"
     else
         changes=$(git diff --staged)
-        echo "Analyzing staged changes"
     fi
 
     # Handle no changes
@@ -147,21 +161,32 @@ function generate_message() {
         return 1
     fi
 
-    local role="You are Autocommit Assistant"
-    if [[ -n "$num_commits" ]]; then
-        changes="Recent commits: $changes"
+    local role
+    if $generate_jira; then
+        role="You are an assistant helping to generate descriptive Jira ticket descriptions."
+    elif $generate_pr; then
+        role="You are an assistant helping to generate clear and detailed Pull Request descriptions."
     else
-        changes="Staged changes: $changes"
+        role="You are an intelligent assistant specializing in creating concise and descriptive Git commit messages."
     fi
 
-    local instructions
-    if $generate_jira; then
-        instructions="$role \n\n$JIRA_INSTRUCTIONS\n\n$changes"
-    elif $generate_pr; then
-        instructions="$role \n\n$PR_INSTRUCTIONS\n\n- Use the current branch name for context: $branch_name.\n- Use the extracted Jira ticket number: \$ticket_number (if available).\n\n$changes"
+    if [[ -n "$num_commits" ]]; then
+        changes="RECENT COMMITS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\n$changes\n\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< RECENT COMMITS END"
     else
-        instructions="$role \n\n$COMMIT_INSTRUCTIONS\n\n- Use the current branch name for context: $branch_name.\n- Use the extracted Jira ticket number: \$ticket_number (if available).\n\n$changes"
+        changes="STAGED CHANGES START >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\n$changes\n\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< STAGED CHANGES END"
     fi
+
+
+    local instructions
+    local additional_params_message="- Use the current branch name for context: $branch_name.\n- Use the extracted Jira ticket number: $ticket_number (if available)."
+    if $generate_jira; then
+        instructions="$role\n\n$changes\n\n$JIRA_INSTRUCTIONS"
+    elif $generate_pr; then
+        instructions="$role\n\n$changes\n\n$PR_INSTRUCTIONS\n\n$additional_params_message"
+    else
+        instructions="$role\n\n$changes\n\n$COMMIT_INSTRUCTIONS\n\n$additional_params_message"
+    fi
+    # echo "Instructions: $instructions"
 
     local prompt="$instructions"
     if [[ -n "$user_context" ]]; then
@@ -169,17 +194,17 @@ function generate_message() {
     fi
 
     local raw_message
-    raw_message=$(echo "$changes" | sgpt --model "$model" --no-cache "$prompt" 2>/dev/null)
+    raw_message=$(echo "$changes" | sgpt --model "$model" --no-cache "$prompt" 2>/dev/null)    
     if [ $? -ne 0 ] || [ -z "$raw_message" ]; then
         echo "Error: Failed to generate message using sgpt."
         return 1
     fi
-
+    $verbose && echo "[Verbose] Raw message: $raw_message"
     # If it's a commit message (not jira/pr), validate it
     local message="$raw_message"
     if ! $generate_jira && ! $generate_pr; then
         if ! validate_message "$raw_message" "$branch_name"; then
-            echo "Raw message validation failed."
+            $verbose && echo "[Verbose] Raw message validation failed."
             message=$(enforce_consistency "$raw_message" "$branch_name" "$model")
             if [[ -z "$message" ]]; then
                 echo "Error: Could not refine commit message."
@@ -187,7 +212,15 @@ function generate_message() {
             fi
         fi
     fi
-
+    
+    $verbose && echo "[Verbose] Generated message:"
+    local title="Commit Message"
+    if $generate_jira; then
+        title="Jira Ticket Description"
+    elif $generate_pr; then
+        title="Pull Request Description"
+    fi
+    echo "____________________________________ $title ____________________________________"
     echo "$message"
     return 0
 }

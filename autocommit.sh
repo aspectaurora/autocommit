@@ -81,9 +81,6 @@ if ! command -v git &> /dev/null; then
     exit 1
 fi
 
-
-# Function: autocommit
-# Description: Generates a commit message or Jira ticket based on staged changes or recent commits.
 function autocommit() {
     local context=""
     local logfile=""
@@ -92,169 +89,133 @@ function autocommit() {
     local message_only=false
     local num_commits=""
     local OPTIND opt
+    local model=""
+    local verbose=false
 
-    while getopts "c:l:jn:mpM:vh" opt; do
+    # Parse options
+    while getopts "c:l:jn:mpM:vVh-:" opt; do
         case $opt in
-            v) echo "autocommit version $VERSION"; exit 0;;
-            h) show_help; exit 0;;
+            v) # version
+                echo "autocommit version $VERSION"
+                exit 0
+                ;;
+            h) # help
+                show_help
+                exit 0
+                ;;
             c) context="$OPTARG";;
             l) logfile="$OPTARG";;
             j) generate_jira=true;;
-            n) num_commits="$OPTARG";;            
-            m) message_only=true;;  # Set the flag when -m is used
+            n) num_commits="$OPTARG";;
+            m) message_only=true;;
             p) generate_pr=true;;
             M) model="$OPTARG";;
-            \?) echo "Invalid option -$OPTARG" >&2; return 1;;
+            V) verbose=true;;
+            -) # Long options
+                case "${OPTARG}" in
+                    version)
+                        echo "autocommit version $VERSION"
+                        exit 0
+                        ;;
+                    help)
+                        show_help
+                        exit 0
+                        ;;
+                    verbose)
+                        verbose=true
+                        ;;
+                    *)
+                        echo "Invalid option --${OPTARG}"
+                        exit 1
+                        ;;
+                esac
+                ;;
+            \?)
+                echo "Invalid option -$OPTARG" >&2
+                return 1
+                ;;
         esac
     done
-    echo "Options: context=$context, logfile=$logfile, generate_jira=$generate_jira, num_commits=$num_commits, message_only=$message_only"
+    shift $((OPTIND-1))
+
+    model="${model:-$DEFAULT_MODEL}"
 
     if $generate_jira && $generate_pr; then
         echo "Error: Options -j and -p cannot be used together."
         exit 1
     fi
 
-    shift $((OPTIND-1))
-
-    local branch_name=$(get_branch_name)
-    echo "Branch: $branch_name"
-    
-    local instructions
-    local changes
-
-    if [[ -n "$num_commits" ]]; then
-        changes=$(git log -n "$num_commits" --pretty=format:"%h %s")
-        echo "Analyzing $num_commits recent commits"        
-    else
-        changes=$(git diff --staged)
-        echo "Analyzing staged changes"
-    fi
-
-    # Handle no changes
-    if [[ -z "$changes" ]]; then
-        echo "No changes to commit"
-        return
-    fi
-            
-    local role="You are Autocommit Assistant - like having a butler for your git commits, only less British (c) Marc Fasel"
-    
-    if [[ -n "$num_commits" ]]; then
-        changes="Recent commits: $changes"
-    else
-        changes="Staged changes: $changes"
-    fi
-
-    if $generate_jira; then
-        # local jira_instructions=$(cat prompts/jira_instructions.txt)
-        local jira_instructions="$JIRA_INSTRUCTIONS"
-        instructions="$role 
-            \n\n
-            $jira_instructions
-            \n\n
-            $changes"     
-    elif $generate_pr; then
-        # local pr_instructions=$(cat prompts/pr_instructions.txt)
-        local pr_instructions="$PR_INSTRUCTIONS"
-        instructions="$role 
-            \n\n
-            $pr_instructions
-            \n\n
-            - Use the current branch name for context: $branch_name.
-            - Use the extracted Jira ticket number: $ticket_number (if available).
-            \n\n
-            $changes"
-    else
-        # local commit_instructions=$(cat prompts/commit_instructions.txt)
-        local commit_instructions="$COMMIT_INSTRUCTIONS"
-        instructions="$role            
-            \n\n
-            $commit_instructions
-            \n\n
-            - Use the current branch name for context: $branch_name.
-            - Use the extracted Jira ticket number: $ticket_number (if available).
-            \n\n
-            $changes"
-    fi
-    
-    model="${model:-$DEFAULT_MODEL}"
-
-    local raw_message
-    if [[ -z "$context" ]]; then
-        raw_message=$(echo "$changes" | sgpt --model "$model" --no-cache "$instructions")
-    else
-        raw_message=$(echo "$changes" | sgpt --model "$model" --no-cache "$instructions \n\n **THE LATEST CONTEXT**: $context")
-    fi
-    
-    if [ $? -ne 0 ] || [ -z "$raw_message" ]; then
-        echo "Error: Failed to generate commit message using sgpt."
-        return 1
-    fi
-            
-    local message
-    # Validate the raw commit message
-    if ! $generate_jira && ! $generate_pr && ! validate_message "$raw_message" "$branch_name"; then
-        echo "Raw message:"
-        echo "$raw_message"
-        echo "Raw message validation failed."
-        
-        # Optionally enforce consistency if validation fails
-        message=$(enforce_consistency "$raw_message" "$branch_name" "$model")
-    else
-        message="$raw_message"
-    fi
-
-    # Handle empty commit messages
-    if [[ -z "$message" ]]; then
-        echo "Error: No commit message generated."
-        return 1
-    fi
-    
     local datetime=$(date +"%Y-%m-%d %H:%M:%S")
 
+    $verbose && echo "[Verbose] Options parsed: context=$context, logfile=$logfile, generate_jira=$generate_jira, generate_pr=$generate_pr, num_commits=$num_commits, message_only=$message_only, model=$model"
+
+    # Normal mode
+    $verbose && echo "Normal mode. Generating message based on provided flags..."
     if $generate_jira; then
-        echo "Generated Jira ticket:"
-        echo "$message"
+        echo "Jira mode enabled. Generating Jira ticket..."
+        local jira_message
+        jira_message=$(generate_message true false "$num_commits" "$context" "$model" "$verbose")                                    
+        [ $? -eq 0 ] || return 1
+        echo "Generated Jira ticket suggestion:"
+        echo "$jira_message"  
         if [[ -n "$logfile" ]]; then
             mkdir -p "$(dirname "$logfile")"
             echo "$datetime - Generated Jira ticket:" >> "$logfile"
-            echo "$message" >> "$logfile"
+            echo "$jira_message" >> "$logfile"
         fi
+        $verbose && echo "[Verbose] Jira ticket generation completed."
+        return 0
+    elif $generate_pr; then
+        echo "PR mode enabled. Generating Pull Request message..."
+        local pr_message
+        pr_message=$(generate_message false true "$num_commits" "$context" "$model" "$verbose")
+        [ $? -eq 0 ] || return 1
+        echo "Generated Pull Request suggestion:"
+        echo "$pr_message"
+        if [[ -n "$logfile" ]]; then
+            mkdir -p "$(dirname "$logfile")"
+            echo "$datetime - Generated Pull Request:" >> "$logfile"
+            echo "$pr_message" >> "$logfile"
+        fi
+        $verbose && echo "[Verbose] Pull Request generation completed."
+        return 0
     else
-        if $generate_pr; then
-            echo "Generated Pull Request:"
-            echo "$message"
-            if [[ -n "$logfile" ]]; then
-                mkdir -p "$(dirname "$logfile")"
-                echo "$datetime - Generated Pull Request:" >> "$logfile"
-                echo "$message" >> "$logfile"
-            fi
-            return
-        fi
+        echo "Commit message mode. Generating commit message..."
+        local commit_message
+        commit_message=$(generate_message false false "$num_commits" "$context" "$model" "$verbose")
+        [ $? -eq 0 ] || return 1
+
+        $verbose && echo "[Verbose] Commit message generated:\n$commit_message"
+
         if [[ -n "$num_commits" ]]; then
             local successMessage="$datetime - Generated commit message based on recent commits:"
             echo "$successMessage"
-            echo "$message"
+            echo "$commit_message"
             if [[ -n "$logfile" ]]; then
                 mkdir -p "$(dirname "$logfile")"
                 echo "$successMessage" >> "$logfile"
             fi
+            $verbose && echo "[Verbose] Commit message based on recent commits printed."
+            return 0
         else            
             if $message_only; then
-                echo "$message"
-                return
+                echo "Message-only mode enabled. Printing commit message:"
+                echo "$commit_message"
+                return 0
             fi
-            local successMessage="$datetime - Commit successful: $message"
+            local successMessage="$datetime - Commit successful: $commit_message"
             local failMessage="$datetime - Commit failed"
             
-            echo "Committing changes..."
+            $verbose && echo "[Verbose] Attempting to commit changes with the generated commit message..."
             
-            if git commit -m"$message"; then
+            if git commit -m"$commit_message"; then
                 if [[ -n "$logfile" ]]; then
                     mkdir -p "$(dirname "$logfile")"
                     echo "$successMessage" >> "$logfile"
                 else
                     echo "$successMessage"
                 fi
+                $verbose && echo "[Verbose] Commit succeeded."
             else
                 if [[ -n "$logfile" ]]; then
                     mkdir -p "$(dirname "$logfile")"
@@ -262,12 +223,13 @@ function autocommit() {
                 else
                     echo "$failMessage"
                 fi
+                $verbose && echo "[Verbose] Commit failed."
             fi
         fi
     fi
+    
 }
 
-# If the script is called directly, execute the function
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     autocommit "$@"
 fi
