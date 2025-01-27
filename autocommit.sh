@@ -58,8 +58,16 @@ DEFAULT_MODEL="gpt-4o-mini"  # This can be overridden by .autocommitrc
 SCRIPT_PATH=$(readlink -f "${BASH_SOURCE[0]}")
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 
-source "$SCRIPT_DIR/lib/prompts.sh"
-source "$SCRIPT_DIR/lib/utils.sh"
+# Source required files with error handling
+if ! source "$SCRIPT_DIR/lib/prompts.sh"; then
+    echo "Error: Failed to load prompts.sh"
+    exit 1
+fi
+
+if ! source "$SCRIPT_DIR/lib/utils.sh"; then
+    echo "Error: Failed to load utils.sh"
+    exit 1
+fi
 
 # Check if inside a Git repository
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
@@ -149,6 +157,26 @@ function autocommit() {
 
     $verbose && echo "[Verbose] Options parsed: context=$context, logfile=$logfile, generate_jira=$generate_jira, generate_pr=$generate_pr, num_commits=$num_commits, message_only=$message_only, model=$model"
 
+    # Validate num_commits if provided
+    if [[ -n "$num_commits" ]]; then
+        if ! [[ "$num_commits" =~ ^[0-9]+$ ]]; then
+            echo "Error: Number of commits must be a positive integer"
+            return 1
+        fi
+        if ((num_commits < 1)); then
+            echo "Error: Number of commits must be greater than 0"
+            return 1
+        fi
+    else
+        # Check for staged changes when not analyzing previous commits
+        if ! git diff --cached --quiet; then
+            $verbose && echo "[Verbose] Found staged changes."
+        else
+            echo "Error: No changes staged for commit. Use 'git add' to stage changes."
+            return 1
+        fi
+    fi
+
     # Normal mode
     $verbose && echo "Normal mode. Generating message based on provided flags..."
     if $generate_jira; then
@@ -159,7 +187,10 @@ function autocommit() {
         echo "____________________________________ Jira Ticket Description ____________________________________"         
         echo "$jira_message"  
         if [[ -n "$logfile" ]]; then
-            mkdir -p "$(dirname "$logfile")"
+            if ! mkdir -p "$(dirname "$logfile")" 2>/dev/null; then
+                echo "Error: Failed to create log directory: $(dirname "$logfile")"
+                return 1
+            fi
             echo "$datetime - Generated Jira ticket:" >> "$logfile"
             echo "$jira_message" >> "$logfile"
         fi
@@ -173,7 +204,10 @@ function autocommit() {
         echo "____________________________________ Pull Request Description ____________________________________"         
         echo "$pr_message"
         if [[ -n "$logfile" ]]; then
-            mkdir -p "$(dirname "$logfile")"
+            if ! mkdir -p "$(dirname "$logfile")" 2>/dev/null; then
+                echo "Error: Failed to create log directory: $(dirname "$logfile")"
+                return 1
+            fi
             echo "$datetime - Generated Pull Request:" >> "$logfile"
             echo "$pr_message" >> "$logfile"
         fi
@@ -193,7 +227,10 @@ function autocommit() {
             echo "$successMessage"
             echo "$commit_message"
             if [[ -n "$logfile" ]]; then
-                mkdir -p "$(dirname "$logfile")"
+                if ! mkdir -p "$(dirname "$logfile")" 2>/dev/null; then
+                    echo "Error: Failed to create log directory: $(dirname "$logfile")"
+                    return 1
+                fi
                 echo "$successMessage" >> "$logfile"
             fi
             $verbose && echo "[Verbose] Commit message based on recent commits printed."
@@ -209,7 +246,10 @@ function autocommit() {
             
             if git commit -m"$commit_message"; then
                 if [[ -n "$logfile" ]]; then
-                    mkdir -p "$(dirname "$logfile")"
+                    if ! mkdir -p "$(dirname "$logfile")" 2>/dev/null; then
+                        echo "Error: Failed to create log directory: $(dirname "$logfile")"
+                        return 1
+                    fi
                     echo "$successMessage" >> "$logfile"
                 else
                     echo "$successMessage"
@@ -217,7 +257,10 @@ function autocommit() {
                 $verbose && echo "[Verbose] Commit succeeded."
             else
                 if [[ -n "$logfile" ]]; then
-                    mkdir -p "$(dirname "$logfile")"
+                    if ! mkdir -p "$(dirname "$logfile")" 2>/dev/null; then
+                        echo "Error: Failed to create log directory: $(dirname "$logfile")"
+                        return 1
+                    fi
                     echo "$failMessage" >> "$logfile"
                 else
                     echo "$failMessage"
