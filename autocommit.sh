@@ -9,11 +9,10 @@
 # It automatically stages and commits the changes with the generated message.
 #
 # Usage:
-#   autocommit [-c <context>] [-l <logfile>] [-j] [-n <number_of_commits>] [-m]
+#   autocommit [-c <context>] [-j] [-n <number_of_commits>] [-m]
 #
 # Options:
 #   -c <context>   Add context (e.g., issue number) to the commit message.
-#   -l <logfile>   Log the commit messages to a file.
 #   -j             Generate a Jira ticket instead of a commit message.
 #   -p             Generate a Pull Request message instead of a commit message.
 #   -n <number>     Analyze the last <number> commits instead of staged changes.
@@ -25,7 +24,6 @@
 # Examples:
 #   autocommit
 #   autocommit -c "Fixes issue #123"
-#   autocommit -c "Fixes issue #123" -l ~/logs/autocommit.log
 #   autocommit -j
 #   autocommit -p
 #   autocommit -n 10
@@ -91,7 +89,6 @@ fi
 
 function autocommit() {
     local context=""
-    local logfile=""
     local generate_jira=false
     local generate_pr=false
     local message_only=false
@@ -101,7 +98,7 @@ function autocommit() {
     local verbose=false
 
     # Parse options
-    while getopts "c:l:jn:mpM:vVh-:" opt; do
+    while getopts "c:jn:mpM:vVh-:" opt; do
         case $opt in
             v) # version
                 echo "autocommit version $VERSION"
@@ -112,7 +109,6 @@ function autocommit() {
                 exit 0
                 ;;
             c) context="$OPTARG";;
-            l) logfile="$OPTARG";;
             j) generate_jira=true;;
             n) num_commits="$OPTARG";;
             m) message_only=true;;
@@ -155,7 +151,7 @@ function autocommit() {
 
     local datetime=$(date +"%Y-%m-%d %H:%M:%S")
 
-    $verbose && echo "[Verbose] Options parsed: context=$context, logfile=$logfile, generate_jira=$generate_jira, generate_pr=$generate_pr, num_commits=$num_commits, message_only=$message_only, model=$model"
+    $verbose && echo "[Verbose] Options parsed: context=$context, generate_jira=$generate_jira, generate_pr=$generate_pr, num_commits=$num_commits, message_only=$message_only, model=$model"
 
     # Validate num_commits if provided
     if [[ -n "$num_commits" ]]; then
@@ -186,14 +182,6 @@ function autocommit() {
         [ $? -eq 0 ] || return 1
         echo "____________________________________ Jira Ticket Description ____________________________________"         
         echo "$jira_message"  
-        if [[ -n "$logfile" ]]; then
-            if ! mkdir -p "$(dirname "$logfile")" 2>/dev/null; then
-                echo "Error: Failed to create log directory: $(dirname "$logfile")"
-                return 1
-            fi
-            echo "$datetime - Generated Jira ticket:" >> "$logfile"
-            echo "$jira_message" >> "$logfile"
-        fi
         $verbose && echo "[Verbose] Jira ticket generation completed."
         return 0
     elif $generate_pr; then
@@ -203,14 +191,6 @@ function autocommit() {
         [ $? -eq 0 ] || return 1
         echo "____________________________________ Pull Request Description ____________________________________"         
         echo "$pr_message"
-        if [[ -n "$logfile" ]]; then
-            if ! mkdir -p "$(dirname "$logfile")" 2>/dev/null; then
-                echo "Error: Failed to create log directory: $(dirname "$logfile")"
-                return 1
-            fi
-            echo "$datetime - Generated Pull Request:" >> "$logfile"
-            echo "$pr_message" >> "$logfile"
-        fi
         $verbose && echo "[Verbose] Pull Request generation completed."
         return 0
     else
@@ -223,53 +203,27 @@ function autocommit() {
         echo "$commit_message"
 
         if [[ -n "$num_commits" ]]; then
-            local successMessage="$datetime - Generated commit message based on recent commits:"
-            echo "$successMessage"
+            echo "Generated commit message based on recent commits:"
             echo "$commit_message"
-            if [[ -n "$logfile" ]]; then
-                if ! mkdir -p "$(dirname "$logfile")" 2>/dev/null; then
-                    echo "Error: Failed to create log directory: $(dirname "$logfile")"
-                    return 1
-                fi
-                echo "$successMessage" >> "$logfile"
-            fi
             $verbose && echo "[Verbose] Commit message based on recent commits printed."
             return 0
         else            
             if $message_only; then
                 return 0
             fi
-            local successMessage="$datetime - Commit successful: $commit_message"
-            local failMessage="$datetime - Commit failed"
             
             $verbose && echo "[Verbose] Attempting to commit changes with the generated commit message..."
             
             if git commit -m"$commit_message"; then
-                if [[ -n "$logfile" ]]; then
-                    if ! mkdir -p "$(dirname "$logfile")" 2>/dev/null; then
-                        echo "Error: Failed to create log directory: $(dirname "$logfile")"
-                        return 1
-                    fi
-                    echo "$successMessage" >> "$logfile"
-                else
-                    echo "$successMessage"
-                fi
+                echo "Commit successful: $commit_message"
                 $verbose && echo "[Verbose] Commit succeeded."
             else
-                if [[ -n "$logfile" ]]; then
-                    if ! mkdir -p "$(dirname "$logfile")" 2>/dev/null; then
-                        echo "Error: Failed to create log directory: $(dirname "$logfile")"
-                        return 1
-                    fi
-                    echo "$failMessage" >> "$logfile"
-                else
-                    echo "$failMessage"
-                fi
+                echo "Commit failed"
                 $verbose && echo "[Verbose] Commit failed."
+                return 1
             fi
         fi
     fi
-    
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
