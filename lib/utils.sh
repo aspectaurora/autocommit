@@ -203,17 +203,6 @@ function generate_message() {
         instructions="$role\n\n$changes\n\n$metadata\n\n$COMMIT_INSTRUCTIONS\n\n$additional_params_message"
     fi
 
-    # local instructions
-    # local additional_params_message="- Use the current branch name for context: $branch_name.\n- Use the extracted Jira ticket number: $ticket_number (if available)."
-    # if $generate_jira; then
-    #     instructions="$role\n\n$changes\n\n$JIRA_INSTRUCTIONS"
-    # elif $generate_pr; then
-    #     instructions="$role\n\n$changes\n\n$PR_INSTRUCTIONS\n\n$additional_params_message"
-    # else
-    #     instructions="$role\n\n$changes\n\n$COMMIT_INSTRUCTIONS\n\n$additional_params_message"
-    # fi
-    # echo "Instructions: $instructions"
-
     local prompt="$instructions"
     if [[ -n "$user_context" ]]; then
         prompt="$prompt\n\n**THE LATEST CONTEXT**: $user_context"
