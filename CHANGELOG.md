@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3] - 2025-01-28
+
+### Added
+
+- Security-first approach with automatic exclusion of sensitive files
+- Verbose mode (-V flag) for detailed logging and debugging
+- Configuration file support (.autocommitrc) for customizing settings
+- Proper installation and uninstallation scripts
+- Structured project organization with lib/ directory
+- Improved error handling and validation
+- Template .autocommitrc creation during installation
+
+### Changed
+
+- Moved prompt templates to separate lib/prompts.sh file
+- Improved code organization with utility functions in lib/utils.sh
+- Enhanced diff summarization with file type-specific handling
+- Updated installation process to use /usr/local/share/autocommit
+- Improved help messages and documentation
+- Removed logfile functionality in favor of verbose mode
+
+### Fixed
+
+- Better handling of empty diffs and invalid inputs
+- Improved error messages for missing dependencies
+- Fixed path handling for script location
+- Better handling of symlinks during installation
+
+### Security
+
+- Added automatic detection and exclusion of sensitive files:
+  - Credential files (.env, .pem, .key, etc.)
+  - Configuration files with potential secrets
+  - Database files
+  - Log files
+  - Backup files
+- Improved handling of sensitive data in diffs
+
 ## [1.2] - 2024-11-23
 
 ### Added
@@ -100,7 +138,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 #### Logging Enhancements:
 
 - Improved logging with timestamps and conditional logging based on user input.
-- Created directories for log files if they don’t exist.
+- Created directories for log files if they don't exist.
 
 #### Error Handling:
 
