@@ -10,7 +10,8 @@
 - [Usage](#usage)
 - [Options](#options)
 - [Examples](#examples)
-- [Logging](#logging)
+- [Uninstallation](#uninstallation)
+- [Security](#security)
 - [Contributing](#contributing)
 - [License](#license)
 - [Inspiration](#inspiration)
@@ -20,16 +21,17 @@
 - **Automated Commit Messages:** Generate concise, structured commit messages, optionally referencing Jira tickets derived from your branch name.
 - **Jira Ticket & PR Generation:** Create Jira tickets and PR summaries with titles and descriptions that follow a set format.
 - **Configurable AI Model & Behavior:** Use a `.autocommitrc` configuration file to customize the AI model and other settings.
-- **Logfile Support:** Log generated messages to a file for auditing.
 - **Consistent Formatting & Validation:** The script validates and enforces consistency in commit messages.
+- **Security-First Approach:** Automatically excludes sensitive files (like .env, credentials, etc.) from AI analysis.
+- **Verbose Mode:** Detailed logging for debugging and transparency.
 
 ## Prerequisites
 
 Before installing and using Autocommit, ensure that you have the following dependencies installed:
 
-- **Git**: Must be installed and you must be inside a Git repository.
-- **sgpt**:  
-  Install via `pip install shell-gpt`.
+- Bash shell
+- Git
+- [Shell GPT (sgpt)](https://github.com/TheR1D/shell_gpt)
 
 ## Installation
 
@@ -39,12 +41,12 @@ Before installing and using Autocommit, ensure that you have the following depen
 
 ```bash
 git clone https://github.com/yourusername/autocommit.git
-cd autocommit
 ```
 
-2. **Run the Install Script:**
+2. **Run the Installation Script:**
 
 ```bash
+cd autocommit
 chmod +x install.sh
 ./install.sh
 ```
@@ -54,9 +56,16 @@ This script will:
 • Create a symlink /`usr/local/bin/autocommit` for easy access
 • Create a `~/.autocommitrc` template if none exists.
 
-3. **Ensure `/usr/local/bin` is in your `PATH`. If not, `install.sh` attempts to add it to your shell profile**
+3. **(Optional) Configure your preferred AI model in `~/.autocommitrc`**:
 
-4. **Reload Your Shell Profile:**
+```bash
+# ~/.autocommitrc
+export AUTOCOMMIT_MODEL="gpt-4o-mini"
+```
+
+4. **Ensure `/usr/local/bin` is in your `PATH`. If not, `install.sh` attempts to add it to your shell profile**
+
+5. **Reload Your Shell Profile:**
 
 ```bash
 source ~/.bashrc # For Bash users
@@ -76,7 +85,6 @@ autocommit [options]
 | Flag         | Description                                                                                |
 | ------------ | ------------------------------------------------------------------------------------------ |
 | -c <context> | Add context to the commit message (e.g., issue number)                                     |
-| -l <logfile> | Log the commit messages to a file                                                          |
 | -j           | Generate a Jira ticket title and description instead of a commit message                   |
 | -p           | Generate a Pull Request title and description instead of a commit message                  |
 | -n <number>  | Number of recent commits to consider (if not provided, uses staged changes)                |
@@ -100,7 +108,7 @@ autocommit
 Add context to the commit message and log it to a file:
 
 ```bash
-autocommit -c "Fixes issue #123" -l ~/logs/autocommit.log
+autocommit -c "Fixes issue #123"
 ```
 
 **Generate a Jira Ticket**
@@ -127,12 +135,10 @@ Generate a commit message without committing:
 autocommit -m
 ```
 
-**Logging**
-
-If the -l option is used, Autocommit will log the generated messages along with timestamps to the specified logfile. Ensure that the directory for the logfile exists or let Autocommit create it.
+**Using Verbose Mode**
 
 ```bash
-autocommit -c "Add new feature" -l ~/logs/autocommit.log
+autocommit -V
 ```
 
 ## Uninstallation
@@ -149,13 +155,25 @@ This will:
 • Offer to remove `~/.autocommitrc`.
 • Will not automatically remove `PATH` modifications from your shell profile.
 
+## Security
+
+Autocommit automatically excludes the following types of files from AI analysis to prevent sensitive data exposure:
+
+- Credential files (.env, .pem, .key, etc.)
+- Configuration files that might contain secrets
+- Database files
+- Log files
+- Backup files
+
+When these files are detected in your changes, they will be listed as "[SENSITIVE FILE EXCLUDED]" in the change summary.
+
 ## Contributing
 
-Contributions are welcome! Please fork the repository and submit a pull request for any enhancements or bug fixes.
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](/LICENSE.md) file for details.
+This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
 
 ## Inspiration
 
