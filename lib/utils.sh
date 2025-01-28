@@ -247,8 +247,14 @@ function classify_changes() {
     local src=""
     local docs=""
     local others=""
+    local sensitive=""
 
     while read -r file; do
+        if is_sensitive_file "$file"; then
+            sensitive+="[SENSITIVE FILE EXCLUDED] $file\n"
+            continue
+        fi
+        
         if [[ $file =~ \.(test|spec)\.(js|ts|jsx|tsx)$ ]]; then
             tests+="$file\n"
         elif [[ $file =~ \.(js|ts|jsx|tsx|py|go|java|cpp|c)$ ]]; then
@@ -259,7 +265,11 @@ function classify_changes() {
             others+="$file\n"
         fi
     done <<< "$files"
+    
     local summary=""
+    if [[ -n "$sensitive" ]]; then
+        summary+="Sensitive Files (Excluded from Analysis):\n$sensitive\n"
+    fi
     if [[ -n "$tests" ]]; then
         summary+="Tests:\n$tests\n"
     fi
@@ -279,6 +289,12 @@ function summarize_diffs() {
     local files="$1"
     local summary=""
     for file in $files; do
+        # Skip sensitive files
+        if is_sensitive_file "$file"; then
+            summary+="[SENSITIVE FILE EXCLUDED] $file\n\n"
+            continue
+        fi
+        
         local max_lines
         
         # Adjust lines based on file type with more granular control
@@ -325,4 +341,50 @@ function extract_metadata() {
         metadata+="Project Metadata from package.json:\n$(jq . "$repo_root/package.json")\n\n"
     fi
     echo -e "$metadata"
+}
+
+function is_sensitive_file() {
+    local file="$1"
+    
+    # List of sensitive file patterns
+    local sensitive_patterns=(
+        # Credentials and secrets
+        '\.env$'
+        '\.pem$'
+        '\.key$'
+        '\.cert$'
+        '\.p12$'
+        '\.pfx$'
+        'credentials\.'
+        'secret'
+        'password'
+        'token'
+        
+        # Configuration files that might contain secrets
+        'config\.json$'
+        'settings\.json$'
+        '\.htpasswd$'
+        '\.netrc$'
+        
+        # Database files
+        '\.sql$'
+        '\.sqlite$'
+        '\.db$'
+        
+        # Log files that might contain sensitive data
+        '\.log$'
+        
+        # Backup files
+        '\.bak$'
+        '\.backup$'
+        '\.swp$'
+    )
+    
+    for pattern in "${sensitive_patterns[@]}"; do
+        if [[ $file =~ $pattern ]]; then
+            return 0  # True - file is sensitive
+        fi
+    done
+    
+    return 1  # False - file is not sensitive
 }
