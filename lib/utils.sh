@@ -279,16 +279,33 @@ function summarize_diffs() {
     local files="$1"
     local summary=""
     for file in $files; do
-        local max_lines=100
+        local max_lines
         
-        # Adjust lines based on file type
+        # Adjust lines based on file type with more granular control
         if [[ $file =~ \.(test|spec)\.(js|ts|jsx|tsx)$ ]]; then
-            max_lines=5
+            max_lines=5  # Test files get minimal context
         elif [[ $file =~ \.(js|ts|jsx|tsx|py|go|java|cpp|c)$ ]]; then
-            max_lines=100
+            max_lines=30  # Source code files get moderate context
+        elif [[ $file =~ \.(md|rst|txt|doc)$ ]]; then
+            max_lines=15  # Documentation files get limited context
+        elif [[ $file =~ \.(json|yaml|yml|toml)$ ]]; then
+            max_lines=20  # Config files get moderate context
+        elif [[ $file =~ \.(css|scss|less|html)$ ]]; then
+            max_lines=25  # Style/markup files get moderate context
         else
-            max_lines=50
-        fi        
+            max_lines=20  # Default for other files
+        fi
+
+        # Further adjust based on total diff size
+        local total_lines
+        total_lines=$(git diff --staged "$file" | wc -l)
+        
+        # Reduce max_lines for very large diffs
+        if (( total_lines > 300 )); then
+            max_lines=$(( max_lines / 3 ))  # Significantly reduce for very large diffs
+        elif (( total_lines > 100 )); then
+            max_lines=$(( max_lines / 2 ))  # Moderately reduce for large diffs
+        fi
         
         # Extract the diff
         diff=$(git diff --staged "$file" | head -n $max_lines)
