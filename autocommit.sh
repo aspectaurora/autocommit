@@ -3,7 +3,7 @@
 # Autocommit - A helper for automatically generating commit messages, Jira tickets, and PR descriptions using AI.
 # Like having a butler for your git commits, only less British (c) Marc Fasel
 # 
-# Version: 1.2
+# Version: 1.3
 #
 # This script uses the sgpt command to generate a concise git commit message or Jira ticket based on staged changes or recent commits.
 # It automatically stages and commits the changes with the generated message.
@@ -49,7 +49,7 @@
 # Inspired by:
 # https://medium.com/@marc_fasel/smash-your-git-commit-messages-like-a-champ-using-chatgpt-0cbe8ea7b3df
 
-VERSION="1.2"
+VERSION="1.3"
 DEFAULT_MODEL="gpt-4o-mini"  # This can be overridden by .autocommitrc
 
 # Resolve the real path of the script to handle symlinks
