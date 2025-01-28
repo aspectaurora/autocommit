@@ -69,13 +69,7 @@ function validate_message() {
     # echo "Validating commit message..."
     local message="$1"
     local branch_name="$2"
-    local ticket_number=""
-
-    # Extract the ticket number from the branch name (assuming it follows the pattern [ABC-123])
-    if [[ $branch_name =~ ([A-Z]+-[0-9]+) ]]; then
-        ticket_number="${BASH_REMATCH[1]}"
-    fi
-    # echo "Ticket number: $ticket_number"
+    local ticket_number="$3"
 
     # Basic validation rules
     if [[ ! $message =~ ^[A-Z] ]]; then
@@ -97,11 +91,13 @@ function enforce_consistency() {
     local raw_message="$1"
     local branch_name="$2"
     local model="$3"
+    local ticket_number="$4"
 
     local instructions="
         $CONSISTENCY_INSTRUCTIONS
         \n\n
         - If ticket number is not present, try to infer it from the branch name: $branch_name
+        - Use this Jira ticket number if available: $ticket_number
 
         Raw commit message: \"$raw_message\""
 
@@ -131,7 +127,7 @@ function generate_message() {
     local verbose="$6"
 
     local branch_name=$(get_branch_name)    
-    # if branch name is not empty, extract ticket number from it
+    # Extract ticket number from branch name
     local ticket_number=""
     if [[ $branch_name =~ ([A-Z]+-[0-9]+) ]]; then
         ticket_number="${BASH_REMATCH[1]}"
@@ -194,9 +190,9 @@ function generate_message() {
     # metadata=$(extract_metadata)
     
     local instructions
-    local additional_params_message="- Use the current branch name for context: $branch_name.\n- Use the extracted Jira ticket number: $ticket_number (if available)."
+    local additional_params_message="- Use the current branch name for context: $branch_name.\n- Use this Jira ticket number: $ticket_number"
     if $generate_jira; then
-        instructions="$role\n\n$changes\n\n$metadata\n\n$JIRA_INSTRUCTIONS"
+        instructions="$role\n\n$changes\n\n$metadata\n\n$JIRA_INSTRUCTIONS\n\n$additional_params_message"
     elif $generate_pr; then
         instructions="$role\n\n$changes\n\n$metadata\n\n$PR_INSTRUCTIONS\n\n$additional_params_message"
     else
@@ -218,9 +214,9 @@ function generate_message() {
     # If it's a commit message (not jira/pr), validate it
     local message="$raw_message"
     if ! $generate_jira && ! $generate_pr; then
-        if ! validate_message "$raw_message" "$branch_name"; then
+        if ! validate_message "$raw_message" "$branch_name" "$ticket_number"; then
             $verbose && echo "[Verbose] Raw message validation failed."
-            message=$(enforce_consistency "$raw_message" "$branch_name" "$model")
+            message=$(enforce_consistency "$raw_message" "$branch_name" "$model" "$ticket_number")
             if [[ -z "$message" ]]; then
                 echo "Error: Could not refine commit message."
                 return 1
