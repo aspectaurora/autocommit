@@ -33,8 +33,8 @@ function get_branch_name() {
     local branch
     branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
     if [[ $? -ne 0 || -z "$branch" ]]; then
-        echo "Error: Unable to retrieve the current Git branch name."
-        exit 0
+        echo "Error: Unable to retrieve the current Git branch name." >&2
+        exit 1
     fi
     echo "$branch"
 }
