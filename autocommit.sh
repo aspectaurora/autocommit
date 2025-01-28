@@ -67,6 +67,11 @@ if ! source "$SCRIPT_DIR/lib/utils.sh"; then
     exit 1
 fi
 
+# Validate that required prompts are available
+if ! validate_prompts; then
+    exit 1
+fi
+
 # Check if inside a Git repository
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
     echo "Error: Not inside a Git repository."

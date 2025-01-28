@@ -110,21 +110,41 @@ function enforce_consistency() {
     echo -e "$refined_message"
 }
 
+function validate_prompts() {
+    local missing_prompts=()
+    
+    # Check each required prompt variable
+    [[ -z "$JIRA_INSTRUCTIONS" ]] && missing_prompts+=("JIRA_INSTRUCTIONS")
+    [[ -z "$PR_INSTRUCTIONS" ]] && missing_prompts+=("PR_INSTRUCTIONS")
+    [[ -z "$COMMIT_INSTRUCTIONS" ]] && missing_prompts+=("COMMIT_INSTRUCTIONS")
+    [[ -z "$CONSISTENCY_INSTRUCTIONS" ]] && missing_prompts+=("CONSISTENCY_INSTRUCTIONS")
+    
+    # If any prompts are missing, show error and exit
+    if ((${#missing_prompts[@]} > 0)); then
+        echo "Error: Required prompt templates are missing:"
+        printf '%s\n' "${missing_prompts[@]}"
+        echo "Please ensure lib/prompts.sh is properly configured."
+        return 1
+    fi
+    
+    return 0
+}
+
 # Generate a commit message using sgpt
 function generate_message() {
-    # Parameters:
-    # $1: generate_jira (true/false)
-    # $2: generate_pr (true/false)
-    # $3: num_commits
-    # $4: context (additional user context)
-    # $5: model (AI model)
-    # $6: verbose (true/false)
-    local generate_jira="$1"
-    local generate_pr="$2"    
+    local is_jira="$1"
+    local is_pr="$2"
     local num_commits="$3"
-    local user_context="$4"
+    local context="$4"
     local model="$5"
     local verbose="$6"
+
+    # Validate prompts before proceeding
+    if ! validate_prompts; then
+        return 1
+    fi
+
+    $verbose && echo "[Verbose] Generating message with parameters: is_jira=$is_jira, is_pr=$is_pr, num_commits=$num_commits"
 
     local branch_name=$(get_branch_name)    
     # Extract ticket number from branch name
@@ -135,10 +155,10 @@ function generate_message() {
 
     if $verbose; then
         echo "[Verbose] Starting generate_message with params:"
-        echo "  generate_jira: $generate_jira"
-        echo "  generate_pr: $generate_pr"        
+        echo "  generate_jira: $is_jira"
+        echo "  generate_pr: $is_pr"        
         echo "  num_commits: $num_commits"
-        echo "  user_context: $user_context"
+        echo "  user_context: $context"
         echo "  model: $model"
         echo "  verbose: $verbose"
         echo "  Branch: $branch_name"
@@ -158,19 +178,13 @@ function generate_message() {
     fi
 
     local role
-    if $generate_jira; then
+    if $is_jira; then
         role="You are an assistant helping to generate descriptive Jira ticket descriptions."
-    elif $generate_pr; then
+    elif $is_pr; then
         role="You are an assistant helping to generate clear and detailed Pull Request descriptions."
     else
         role="You are an intelligent assistant specializing in creating concise and descriptive Git commit messages."
     fi
-
-    # if [[ -n "$num_commits" ]]; then
-    #     changes="RECENT COMMITS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\n$changes\n\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< RECENT COMMITS END"
-    # else
-    #     changes="STAGED CHANGES START >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\n$changes\n\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< STAGED CHANGES END"
-    # fi
 
     if [[ -n "$num_commits" ]]; then
         changes="RECENT COMMITS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\n$changes\n\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< RECENT COMMITS END"
@@ -181,8 +195,6 @@ function generate_message() {
         file_analysis=$(classify_changes "$files")
         local diffs
         diffs=$(summarize_diffs "$files")
-        # echo "File Analysis:\n$file_analysis"        
-        # echo "Diffs:\n$diffs"
         changes="STAGED CHANGES >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\n$file_analysis\n\nSummarized Diffs:\n$diffs\n\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< STAGED CHANGES END"
     fi
 
@@ -191,17 +203,17 @@ function generate_message() {
     
     local instructions
     local additional_params_message="- Use the current branch name for context: $branch_name.\n- Use this Jira ticket number: $ticket_number"
-    if $generate_jira; then
+    if $is_jira; then
         instructions="$role\n\n$changes\n\n$metadata\n\n$JIRA_INSTRUCTIONS\n\n$additional_params_message"
-    elif $generate_pr; then
+    elif $is_pr; then
         instructions="$role\n\n$changes\n\n$metadata\n\n$PR_INSTRUCTIONS\n\n$additional_params_message"
     else
         instructions="$role\n\n$changes\n\n$metadata\n\n$COMMIT_INSTRUCTIONS\n\n$additional_params_message"
     fi
 
     local prompt="$instructions"
-    if [[ -n "$user_context" ]]; then
-        prompt="$prompt\n\n**THE LATEST CONTEXT**: $user_context"
+    if [[ -n "$context" ]]; then
+        prompt="$prompt\n\n**THE LATEST CONTEXT**: $context"
     fi
 
     local raw_message
@@ -213,7 +225,7 @@ function generate_message() {
     $verbose && echo "[Verbose] Raw message: $raw_message"
     # If it's a commit message (not jira/pr), validate it
     local message="$raw_message"
-    if ! $generate_jira && ! $generate_pr; then
+    if ! $is_jira && ! $is_pr; then
         if ! validate_message "$raw_message" "$branch_name" "$ticket_number"; then
             $verbose && echo "[Verbose] Raw message validation failed."
             message=$(enforce_consistency "$raw_message" "$branch_name" "$model" "$ticket_number")
@@ -269,25 +281,11 @@ function summarize_diffs() {
     for file in $files; do
         local max_lines=100
         
-        # local total_lines
-        # total_lines=$(git diff --staged "$file" | wc -l)
-        
-        # # Adjust lines dynamically
-        # if (( total_lines > 50 )); then
-        #     max_lines=20
-        # elif (( total_lines > 20 )); then
-        #     max_lines=10
-        # else
-        #     max_lines=$total_lines
-        # fi
-        
         # Adjust lines based on file type
         if [[ $file =~ \.(test|spec)\.(js|ts|jsx|tsx)$ ]]; then
             max_lines=5
         elif [[ $file =~ \.(js|ts|jsx|tsx|py|go|java|cpp|c)$ ]]; then
             max_lines=100
-        # elif [[ $file =~ \.(md|rst)$ ]]; then
-        #     max_lines=15
         else
             max_lines=50
         fi        
