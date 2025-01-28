@@ -209,6 +209,7 @@ function autocommit() {
             return 0
         else            
             if $message_only; then
+                echo "$commit_message"
                 return 0
             fi
             
