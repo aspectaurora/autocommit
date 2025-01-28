@@ -2,6 +2,9 @@
 # Utility functions for autocommit
 
 # Load configuration from .autocommitrc file if present
+# Looks for config in repo root first, then home directory
+# No args
+# Returns: None
 function load_config() {
     local repo_root    
     # Determine repository root
@@ -29,6 +32,8 @@ function load_config() {
 }
 
 # Get current branch name
+# No args
+# Returns: Current branch name or exits with error
 function get_branch_name() {
     local branch
     branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
@@ -40,6 +45,8 @@ function get_branch_name() {
 }
 
 # Show help message
+# No args
+# Returns: None
 function show_help() {
     echo "Usage: autocommit [options]"
     echo "Options:"
@@ -65,6 +72,12 @@ function show_help() {
 }
 
 # Validate commit message
+# Args:
+#   $1 - Commit message to validate
+#   $2 - Current branch name
+#   $3 - Jira ticket number (if any)
+# Returns:
+#   0 if valid, 1 if invalid
 function validate_message() {
     # echo "Validating commit message..."
     local message="$1"
@@ -343,6 +356,11 @@ function extract_metadata() {
     echo -e "$metadata"
 }
 
+# Check if a file contains sensitive data that should be excluded from AI analysis
+# Args:
+#   $1 - File path to check
+# Returns:
+#   0 if file is sensitive, 1 otherwise
 function is_sensitive_file() {
     local file="$1"
     
