@@ -1,64 +1,52 @@
 #!/usr/bin/env bash
 #
-# uninstall.sh - Uninstallation script for Autocommit
-#
-# This script removes Autocommit by:
-# - Removing the symlink at /usr/local/bin/autocommit
-# - Removing the /usr/local/share/autocommit directory
-# - Optionally removing ~/.autocommitrc and PATH modifications
+# Uninstallation script for Autocommit
+# This script removes Autocommit and its files from the system.
 
-set -e
+# Source logger for consistent output
+source "$(dirname "${BASH_SOURCE[0]}")/lib/core/logger.sh"
 
+# Installation paths
 INSTALL_DIR="/usr/local/share/autocommit"
-BIN_PATH="/usr/local/bin/autocommit"
+BIN_DIR="/usr/local/bin"
+CONFIG_FILE="$HOME/.autocommitrc"
 
-print_message() {
-    echo "========================================"
-    echo "$1"
-    echo "========================================"
-}
+# Check if running with sudo/root
+if [[ $EUID -ne 0 ]]; then
+    error_exit "This script must be run with sudo privileges." 1
+fi
 
-print_message "Autocommit Uninstallation"
-
-if [ ! -L "$BIN_PATH" ]; then
-    echo "Autocommit symlink not found at $BIN_PATH. It may already be uninstalled."
+# Remove symlink
+log_info "Removing symlink..."
+if [[ -L "$BIN_DIR/autocommit" ]]; then
+    rm -f "$BIN_DIR/autocommit" || error_exit "Failed to remove symlink." 2
 else
-    read -p "Remove the Autocommit symlink at $BIN_PATH? [y/N]: " confirm_symlink
-    if [[ "$confirm_symlink" =~ ^[Yy]$ ]]; then
-        sudo rm -f "$BIN_PATH"
-        echo "Removed symlink $BIN_PATH."
-    else
-        echo "Kept symlink. Uninstallation halted."
-        exit 0
-    fi
+    log_warn "Symlink not found in $BIN_DIR"
 fi
 
-if [ -d "$INSTALL_DIR" ]; then
-    read -p "Remove Autocommit installation directory at $INSTALL_DIR? [y/N]: " confirm_dir
-    if [[ "$confirm_dir" =~ ^[Yy]$ ]]; then
-        sudo rm -rf "$INSTALL_DIR"
-        echo "Removed $INSTALL_DIR."
-    else
-        echo "Kept $INSTALL_DIR. Uninstallation incomplete."
-    fi
+# Remove installation directory
+log_info "Removing installation directory..."
+if [[ -d "$INSTALL_DIR" ]]; then
+    rm -rf "$INSTALL_DIR" || error_exit "Failed to remove installation directory." 3
 else
-    echo "No directory found at $INSTALL_DIR. Skipping."
+    log_warn "Installation directory not found at $INSTALL_DIR"
 fi
 
-if [ -f "$HOME/.autocommitrc" ]; then
-    read -p "Remove ~/.autocommitrc file? [y/N]: " confirm_rc
-    if [[ "$confirm_rc" =~ ^[Yy]$ ]]; then
-        rm -f "$HOME/.autocommitrc"
-        echo "Removed ~/.autocommitrc."
+# Ask about removing config file
+if [[ -f "$CONFIG_FILE" ]]; then
+    read -p "Do you want to remove the configuration file ($CONFIG_FILE)? [y/N] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        rm -f "$CONFIG_FILE" || error_exit "Failed to remove configuration file." 4
+        log_info "Configuration file removed."
     else
-        echo "Kept ~/.autocommitrc."
+        log_info "Configuration file preserved at $CONFIG_FILE"
     fi
 fi
 
-# Note: Removing PATH modifications from user shell profiles is optional and risky.
-# The user might have other entries in their PATH. Unless you strictly restore backups,
-# it's best just to inform the user to manually edit their PATH if desired.
-# For safety, we won't automatically remove PATH modifications here.
+# Warn about PATH modification
+log_warn "Note: If you modified your shell profile to add /usr/local/bin to PATH,"
+log_warn "you may want to remove that modification manually."
 
-print_message "Autocommit has been uninstalled."
-echo "If needed, remove any PATH modifications manually from your shell profiles."
+log_info "Uninstallation complete! 👋"
+log_info "Thank you for using Autocommit!"

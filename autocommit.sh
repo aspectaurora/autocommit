@@ -49,47 +49,51 @@
 # Inspired by:
 # https://medium.com/@marc_fasel/smash-your-git-commit-messages-like-a-champ-using-chatgpt-0cbe8ea7b3df
 
+# Ensure we're running with bash
+if [ -z "${BASH_VERSION:-}" ]; then
+    echo "Error: This script requires bash to run."
+    echo "Please run with: bash $0"
+    exit 1
+fi
+
 VERSION="1.3"
-DEFAULT_MODEL="gpt-4o-mini"  # This can be overridden by .autocommitrc
 
 # Resolve the real path of the script to handle symlinks
 SCRIPT_PATH=$(readlink -f "${BASH_SOURCE[0]}")
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 
-# Source required files with error handling
-if ! source "$SCRIPT_DIR/lib/prompts.sh"; then
-    echo "Error: Failed to load prompts.sh"
-    exit 1
-fi
+# Source required modules with error handling
+for module in core/logger.sh core/config.sh git/utils.sh ai/prompts.sh; do
+    module_path="$SCRIPT_DIR/lib/$module"
+    if [[ ! -f "$module_path" ]]; then
+        echo "Error: Required module not found: $module"
+        echo "Expected path: $module_path"
+        exit 1
+    fi
+    if ! source "$module_path"; then
+        echo "Error: Failed to load $module"
+        exit 1
+    fi
+done
 
-if ! source "$SCRIPT_DIR/lib/utils.sh"; then
-    echo "Error: Failed to load utils.sh"
-    exit 1
-fi
-
-# Validate that required prompts are available
-if ! validate_prompts; then
-    exit 1
-fi
+# Set initial log level
+set_log_level $LOG_LEVEL_INFO
 
 # Check if inside a Git repository
-if ! git rev-parse --git-dir > /dev/null 2>&1; then
-    echo "Error: Not inside a Git repository."
-    exit 1
+if ! is_git_repo; then
+    error_exit "Not inside a Git repository." 2
 fi
 
-# Load configuration before checking dependencies so config can specify alternative paths or models
+# Load configuration before checking dependencies
 load_config
 
 # Check if dependencies are installed
 if ! command -v sgpt &> /dev/null; then
-    echo "Error: sgpt is not installed. Please install it using 'pip install shell-gpt'."
-    exit 1
+    error_exit "sgpt is not installed. Please install it using 'pip install shell-gpt'." 3
 fi
 
 if ! command -v git &> /dev/null; then
-    echo "Error: git is not installed. Please install it and try again."
-    exit 1
+    error_exit "git is not installed. Please install it and try again." 4
 fi
 
 function autocommit() {
@@ -119,7 +123,10 @@ function autocommit() {
             m) message_only=true;;
             p) generate_pr=true;;
             M) model="$OPTARG";;
-            V) verbose=true;;
+            V) 
+                verbose=true
+                set_log_level $LOG_LEVEL_VERBOSE
+                ;;
             -) # Long options
                 case "${OPTARG}" in
                     version)
@@ -132,102 +139,80 @@ function autocommit() {
                         ;;
                     verbose)
                         verbose=true
+                        set_log_level $LOG_LEVEL_VERBOSE
                         ;;
                     *)
-                        echo "Invalid option --${OPTARG}"
-                        exit 1
+                        error_exit "Invalid option --${OPTARG}" 5
                         ;;
                 esac
                 ;;
             \?)
-                echo "Invalid option -$OPTARG" >&2
-                return 1
+                error_exit "Invalid option -$OPTARG" 5
                 ;;
         esac
     done
     shift $((OPTIND-1))
 
-    model="${model:-$DEFAULT_MODEL}"
+    # Get model from config or argument
+    model="${model:-$(get_config DEFAULT_MODEL "$DEFAULT_MODEL")}"
 
     if $generate_jira && $generate_pr; then
-        echo "Error: Options -j and -p cannot be used together."
-        exit 1
+        error_exit "Options -j and -p cannot be used together." 6
     fi
 
-    local datetime=$(date +"%Y-%m-%d %H:%M:%S")
-
-    $verbose && echo "[Verbose] Options parsed: context=$context, generate_jira=$generate_jira, generate_pr=$generate_pr, num_commits=$num_commits, message_only=$message_only, model=$model"
+    log_debug "Options parsed: context=$context, generate_jira=$generate_jira, generate_pr=$generate_pr, num_commits=$num_commits, message_only=$message_only, model=$model"
 
     # Validate num_commits if provided
     if [[ -n "$num_commits" ]]; then
         if ! [[ "$num_commits" =~ ^[0-9]+$ ]]; then
-            echo "Error: Number of commits must be a positive integer"
-            return 1
+            error_exit "Number of commits must be a positive integer" 7
         fi
         if ((num_commits < 1)); then
-            echo "Error: Number of commits must be greater than 0"
-            return 1
+            error_exit "Number of commits must be greater than 0" 8
         fi
     else
         # Check for staged changes when not analyzing previous commits
-        if ! git diff --cached --quiet; then
-            $verbose && echo "[Verbose] Found staged changes."
-        else
-            echo "Error: No changes staged for commit. Use 'git add' to stage changes."
-            return 1
+        if ! has_staged_changes; then
+            error_exit "No changes staged for commit. Use 'git add' to stage changes." 9
         fi
     fi
 
-    # Normal mode
-    $verbose && echo "Normal mode. Generating message based on provided flags..."
+    # Generate message based on provided flags
+    log_info "Generating message based on provided flags..."
+    local message
+    message=$(generate_message "$generate_jira" "$generate_pr" "$num_commits" "$context" "$model" "$verbose")
+    if [[ $? -ne 0 || -z "$message" ]]; then
+        error_exit "Failed to generate message." 10
+    fi
+
     if $generate_jira; then
-        echo "Jira mode enabled. Generating Jira ticket..."
-        local jira_message
-        jira_message=$(generate_message true false "$num_commits" "$context" "$model" "$verbose")                                    
-        [ $? -eq 0 ] || return 1
-        echo "____________________________________ Jira Ticket Description ____________________________________"         
-        echo "$jira_message"  
-        $verbose && echo "[Verbose] Jira ticket generation completed."
+        log_info "Generated Jira ticket description:"
+        echo "____________________________________ Jira Ticket Description ____________________________________"
+        echo "$message"
         return 0
     elif $generate_pr; then
-        echo "PR mode enabled. Generating Pull Request message..."
-        local pr_message
-        pr_message=$(generate_message false true "$num_commits" "$context" "$model" "$verbose")
-        [ $? -eq 0 ] || return 1
-        echo "____________________________________ Pull Request Description ____________________________________"         
-        echo "$pr_message"
-        $verbose && echo "[Verbose] Pull Request generation completed."
+        log_info "Generated Pull Request description:"
+        echo "____________________________________ Pull Request Description ____________________________________"
+        echo "$message"
         return 0
     else
-        echo "Commit message mode. Generating commit message..."
-        local commit_message
-        commit_message=$(generate_message false false "$num_commits" "$context" "$model" "$verbose")
-        [ $? -eq 0 ] || return 1
-
-        echo "____________________________________ Commit Message ____________________________________" 
-        echo "$commit_message"
+        log_info "Generated commit message:"
+        echo "____________________________________ Commit Message ____________________________________"
+        echo "$message"
 
         if [[ -n "$num_commits" ]]; then
-            echo "Generated commit message based on recent commits:"
-            echo "$commit_message"
-            $verbose && echo "[Verbose] Commit message based on recent commits printed."
             return 0
-        else            
-            if $message_only; then
-                echo "$commit_message"
-                return 0
-            fi
-            
-            $verbose && echo "[Verbose] Attempting to commit changes with the generated commit message..."
-            
-            if git commit -m"$commit_message"; then
-                echo "Commit successful: $commit_message"
-                $verbose && echo "[Verbose] Commit succeeded."
-            else
-                echo "Commit failed"
-                $verbose && echo "[Verbose] Commit failed."
-                return 1
-            fi
+        fi
+
+        if $message_only; then
+            return 0
+        fi
+
+        log_debug "Attempting to commit changes with the generated commit message..."
+        if create_commit "$message"; then
+            log_info "Commit successful: $message"
+        else
+            error_exit "Commit failed" 11
         fi
     fi
 }
