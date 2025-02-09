@@ -9,6 +9,7 @@ readonly _AUTOCOMMIT_CONFIG_SH=1
 # Source logger
 source "$(dirname "${BASH_SOURCE[0]}")/logger.sh"
 
+
 # Default configuration values
 DEFAULT_MODEL="gpt-4o-mini"
 DEFAULT_VERBOSE="false"

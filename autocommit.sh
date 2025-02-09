@@ -3,7 +3,7 @@
 # Autocommit - A helper for automatically generating commit messages, Jira tickets, and PR descriptions using AI.
 # Like having a butler for your git commits, only less British (c) Marc Fasel
 # 
-# Version: 1.3
+# Version: 1.4
 #
 # This script uses the sgpt command to generate a concise git commit message or Jira ticket based on staged changes or recent commits.
 # It automatically stages and commits the changes with the generated message.
@@ -56,14 +56,62 @@ if [ -z "${BASH_VERSION:-}" ]; then
     exit 1
 fi
 
-VERSION="1.3"
+# Check bash version (we need 4.0+ for associative arrays)
+if ((BASH_VERSINFO[0] < 4)); then
+    echo "Error: This script requires bash version 4.0 or higher."
+    echo "Current version: $BASH_VERSION"
+    echo "Please upgrade your bash installation."
+    exit 1
+fi
+
+# Enable strict mode
+set -euo pipefail
+IFS=$'\n\t'
+
+# Script version
+VERSION_FILE="$(dirname "${BASH_SOURCE[0]}")/VERSION"
+if [[ -f "$VERSION_FILE" ]]; then
+    VERSION="$(cat "$VERSION_FILE")"
+else
+    VERSION="2.0.0"  # Fallback version if file not found
+fi
+
+# Function to display version
+show_version() {
+    echo "autocommit version $VERSION"
+    exit 0
+}
+
+# Function to cleanup on exit
+cleanup() {
+    local exit_code=$?
+    # Add any cleanup tasks here
+    exit $exit_code
+}
+trap cleanup EXIT
+
+# Function to handle errors
+handle_error() {
+    local exit_code=$?
+    local line_no=$1
+    echo "Error occurred in script $0 at line $line_no with exit code $exit_code"
+    exit $exit_code
+}
+trap 'handle_error ${LINENO}' ERR
 
 # Resolve the real path of the script to handle symlinks
-SCRIPT_PATH=$(readlink -f "${BASH_SOURCE[0]}")
+SCRIPT_PATH=$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 
 # Source required modules with error handling
-for module in core/logger.sh core/config.sh git/utils.sh ai/prompts.sh; do
+declare -a REQUIRED_MODULES=(
+    "core/logger.sh"
+    "core/config.sh"
+    "git/utils.sh"
+    "ai/prompts.sh"
+)
+
+for module in "${REQUIRED_MODULES[@]}"; do
     module_path="$SCRIPT_DIR/lib/$module"
     if [[ ! -f "$module_path" ]]; then
         echo "Error: Required module not found: $module"
@@ -77,7 +125,7 @@ for module in core/logger.sh core/config.sh git/utils.sh ai/prompts.sh; do
 done
 
 # Set initial log level
-set_log_level $LOG_LEVEL_INFO
+set_log_level "${LOG_LEVEL_INFO:-2}"
 
 # Check if inside a Git repository
 if ! is_git_repo; then
@@ -87,14 +135,53 @@ fi
 # Load configuration before checking dependencies
 load_config
 
-# Check if dependencies are installed
-if ! command -v sgpt &> /dev/null; then
-    error_exit "sgpt is not installed. Please install it using 'pip install shell-gpt'." 3
-fi
+# Display version information
+log_info "autocommit version $VERSION"
 
-if ! command -v git &> /dev/null; then
-    error_exit "git is not installed. Please install it and try again." 4
-fi
+# Check if dependencies are installed
+for cmd in sgpt git; do
+    if ! command -v "$cmd" &> /dev/null; then
+        case "$cmd" in
+            sgpt)
+                error_exit "sgpt is not installed. Please install it using 'pip install shell-gpt'." 3
+                ;;
+            git)
+                error_exit "git is not installed. Please install it and try again." 4
+                ;;
+        esac
+    fi
+done
+
+# Function to show help
+show_help() {
+    cat << EOF
+Autocommit - A helper for automatically generating commit messages using AI.
+Version: $VERSION
+
+Usage:
+    autocommit [-c <context>] [-j] [-n <number_of_commits>] [-m]
+
+Options:
+    -c <context>   Add context (e.g., issue number) to the commit message.
+    -j             Generate a Jira ticket instead of a commit message.
+    -p             Generate a Pull Request message instead of a commit message.
+    -n <number>    Analyze the last <number> commits instead of staged changes.
+    -m             Print the generated message only, do not commit.
+    -M <model>     Specify the AI model for sgpt (overrides DEFAULT_MODEL in .autocommitrc).
+    -v, --version  Display version information.
+    -h, --help     Show this help message.
+    -V, --verbose  Enable verbose logging.
+
+Examples:
+    autocommit
+    autocommit -c "Fixes issue #123"
+    autocommit -j
+    autocommit -p
+    autocommit -n 10
+    autocommit -m
+EOF
+    exit 0
+}
 
 function autocommit() {
     local context=""
@@ -110,12 +197,10 @@ function autocommit() {
     while getopts "c:jn:mpM:vVh-:" opt; do
         case $opt in
             v) # version
-                echo "autocommit version $VERSION"
-                exit 0
+                show_version
                 ;;
             h) # help
                 show_help
-                exit 0
                 ;;
             c) context="$OPTARG";;
             j) generate_jira=true;;
@@ -130,12 +215,10 @@ function autocommit() {
             -) # Long options
                 case "${OPTARG}" in
                     version)
-                        echo "autocommit version $VERSION"
-                        exit 0
+                        show_version
                         ;;
                     help)
                         show_help
-                        exit 0
                         ;;
                     verbose)
                         verbose=true

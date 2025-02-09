@@ -82,41 +82,27 @@ function get_recent_commits() {
 }
 
 # Classify changes in staged files
-# Args:
-#   $1 - List of files (newline separated)
+# No args
 # Returns: Classification of changes
 function classify_changes() {
-    local files="$1"
     local classification=""
-    local file_types=()
-    local file_operations=()
+    
+    # Get list of staged files
+    local staged_files
+    staged_files=$(git diff --cached --name-only)
     
     while IFS= read -r file; do
         [[ -z "$file" ]] && continue
         
-        # Determine file type
-        local ext="${file##*.}"
-        [[ "$ext" != "$file" ]] && file_types+=("$ext")
-        
         # Determine operation
         if [[ ! -f "$file" ]]; then
-            file_operations+=("deleted")
+            classification+="Deleted: $file\n"
         elif git diff --cached --name-only --diff-filter=A "$file" | grep -q .; then
-            file_operations+=("added")
+            classification+="Added: $file\n"
         else
-            file_operations+=("modified")
+            classification+="Modified: $file\n"
         fi
-    done <<< "$files"
-    
-    # Summarize file types
-    if [[ ${#file_types[@]} -gt 0 ]]; then
-        classification+="File types: ${file_types[*]}\n"
-    fi
-    
-    # Summarize operations
-    if [[ ${#file_operations[@]} -gt 0 ]]; then
-        classification+="Operations: ${file_operations[*]}"
-    fi
+    done <<< "$staged_files"
     
     echo -e "$classification"
 }

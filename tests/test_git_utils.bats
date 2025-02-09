@@ -4,7 +4,7 @@
 BASH="/opt/homebrew/bin/bash"
 export BASH
 
-load '../lib/core/git_utils.sh'
+load '../lib/git/utils.sh'
 
 setup() {
     # Create a temporary directory for test repository

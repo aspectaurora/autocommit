@@ -51,7 +51,10 @@ done
 
 # Create symlink
 log_info "Creating symlink..."
-ln -sf "$INSTALL_DIR/autocommit.sh" "$BIN_DIR/autocommit" || error_exit "Failed to create symlink." 9
+cat > "$BIN_DIR/autocommit" << 'EOF'
+#!/usr/bin/env bash
+exec bash "/usr/local/share/autocommit/autocommit.sh" "$@"
+EOF
 chmod +x "$BIN_DIR/autocommit" || error_exit "Failed to make script executable." 10
 
 # Create default config if it doesn't exist
