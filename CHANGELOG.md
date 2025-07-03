@@ -31,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Improved error messages for missing dependencies
 - Fixed path handling for script location
 - Better handling of symlinks during installation
+- Updated help text to remove deprecated `-l` option and document the `-V` verbose flag
 
 ### Security
 
